@@ -19,6 +19,7 @@ class MockScenario(str, Enum):
 
 
 class ForecastRequest(StrictModel):
+    mode: Literal["configured", "mock", "integrated"] = "configured"
     issue_time: datetime
     horizon_hours: Literal[24, 48] = 48
     scenario: MockScenario = MockScenario.normal
@@ -28,16 +29,17 @@ class ForecastRequest(StrictModel):
     def require_timezone(cls, value: datetime) -> datetime:
         if value.tzinfo is None:
             raise ValueError("issue_time must include a timezone")
-        return value
+        from datetime import timezone
+        return value.astimezone(timezone.utc)
 
 
 class ForecastPoint(StrictModel):
     forecast_time: datetime
     lead_hours: int = Field(ge=1)
     turbine_id: str
-    p10: float = Field(ge=0, le=2)
+    p10: float | None = Field(default=None, ge=0, le=2)
     p50: float = Field(ge=0, le=2)
-    p90: float = Field(ge=0, le=2)
+    p90: float | None = Field(default=None, ge=0, le=2)
     model_predictions: dict[str, float] = Field(default_factory=dict)
 
 
@@ -60,6 +62,10 @@ class Provenance(StrictModel):
     future_information_used: bool = False
     integrity_status: IntegrityStatus = IntegrityStatus.unknown
     is_mock: bool = False
+    uncertainty_available: bool = True
+    availability_basis: str | None = None
+    model_cutoff: datetime | None = None
+    source_forecast_id: str | None = None
 
 
 class LineageEntry(StrictModel):

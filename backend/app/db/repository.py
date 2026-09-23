@@ -1,3 +1,5 @@
+from datetime import datetime, timezone, timedelta
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -16,6 +18,11 @@ from app.schemas.forecast import (
 from app.schemas.weather import KnowledgeBoundary, WeatherContext
 
 from .models import AgentEvent, BacktestResult, ForecastPoint, ForecastRun
+
+
+def utc(value: datetime) -> datetime:
+    # SQLite drops tzinfo. New requests are normalized to UTC before persistence.
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
 
 class ForecastRepository:
@@ -47,9 +54,11 @@ class ForecastRepository:
                 turbine_id=point.turbine_id,
                 forecast_time=point.forecast_time,
                 lead_hours=point.lead_hours,
-                p10=point.p10,
+                # Legacy SQLite columns are NOT NULL. Hidden storage placeholders
+                # are never returned as quantiles when uncertainty_available=False.
+                p10=point.p10 if point.p10 is not None else point.p50,
                 p50=point.p50,
-                p90=point.p90,
+                p90=point.p90 if point.p90 is not None else point.p50,
                 model_predictions=point.model_predictions,
             )
             for point in detail.points
@@ -95,14 +104,14 @@ class ForecastRepository:
     def _to_summary(run: ForecastRun) -> ForecastRunSummary:
         return ForecastRunSummary(
             forecast_id=run.id,
-            issue_time=run.issue_time,
+            issue_time=utc(datetime.fromisoformat(run.provenance_json["issue_time"])) if run.provenance_json.get("issue_time") else utc(run.issue_time),
             horizon_hours=run.horizon_hours,
             version=run.version,
             status=run.status,
             confidence=run.confidence,
             model_name=run.model_name,
             integrity_status=run.integrity_status,
-            created_at=run.created_at,
+            created_at=utc(run.created_at),
             is_mock=run.is_mock,
         )
 
@@ -111,12 +120,12 @@ class ForecastRepository:
             **self._to_summary(run).model_dump(),
             points=[
                 ForecastPointSchema(
-                    forecast_time=point.forecast_time,
+                    forecast_time=self._to_summary(run).issue_time + timedelta(hours=point.lead_hours),
                     lead_hours=point.lead_hours,
                     turbine_id=point.turbine_id,
-                    p10=point.p10,
+                    p10=point.p10 if run.provenance_json.get("uncertainty_available", True) else None,
                     p50=point.p50,
-                    p90=point.p90,
+                    p90=point.p90 if run.provenance_json.get("uncertainty_available", True) else None,
                     model_predictions=point.model_predictions,
                 )
                 for point in run.points
@@ -128,7 +137,7 @@ class ForecastRepository:
             agent=AgentResult.model_validate(run.agent_json),
             events=[
                 AgentEventSchema(
-                    timestamp=event.timestamp,
+                    timestamp=utc(event.timestamp),
                     type=event.type,
                     status=event.status,
                     message=event.message,
