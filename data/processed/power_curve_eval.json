@@ -1,0 +1,90 @@
+{
+  "label": "holdout Jan 2026, not the organizer metric",
+  "cutoff": "2026-01-01T00:00:00+00:00",
+  "evaluation": "January issue times and January target hours only; is_valid targets",
+  "persistence": "Last finite observed power with timestamp + 1h <= issue_time; flagged observations retained",
+  "training_counts": {
+    "T1": {
+      "physics": 22841,
+      "forecast": 26338
+    },
+    "T2": {
+      "physics": 24088,
+      "forecast": 28958
+    }
+  },
+  "metrics": [
+    {
+      "turbine_id": "T1",
+      "lead_bucket_h": "1-24",
+      "method": "power_curve",
+      "n": 728,
+      "excluded": 0,
+      "mae": 0.16284117135296755,
+      "rmse": 0.2054051751132054
+    },
+    {
+      "turbine_id": "T1",
+      "lead_bucket_h": "1-24",
+      "method": "persistence",
+      "n": 728,
+      "excluded": 0,
+      "mae": 0.288459249084249,
+      "rmse": 0.4228446883839331
+    },
+    {
+      "turbine_id": "T1",
+      "lead_bucket_h": "25-48",
+      "method": "power_curve",
+      "n": 704,
+      "excluded": 0,
+      "mae": 0.19228392566957542,
+      "rmse": 0.24447210129324878
+    },
+    {
+      "turbine_id": "T1",
+      "lead_bucket_h": "25-48",
+      "method": "persistence",
+      "n": 704,
+      "excluded": 0,
+      "mae": 0.34703124999999996,
+      "rmse": 0.47597054952502205
+    },
+    {
+      "turbine_id": "T2",
+      "lead_bucket_h": "1-24",
+      "method": "power_curve",
+      "n": 726,
+      "excluded": 0,
+      "mae": 0.16499775280822304,
+      "rmse": 0.20778274334583507
+    },
+    {
+      "turbine_id": "T2",
+      "lead_bucket_h": "1-24",
+      "method": "persistence",
+      "n": 726,
+      "excluded": 0,
+      "mae": 0.2871900826446281,
+      "rmse": 0.4237551133402787
+    },
+    {
+      "turbine_id": "T2",
+      "lead_bucket_h": "25-48",
+      "method": "power_curve",
+      "n": 702,
+      "excluded": 0,
+      "mae": 0.19227465227702367,
+      "rmse": 0.24513557698186783
+    },
+    {
+      "turbine_id": "T2",
+      "lead_bucket_h": "25-48",
+      "method": "persistence",
+      "n": 702,
+      "excluded": 0,
+      "mae": 0.3437606837606837,
+      "rmse": 0.4741487515746681
+    }
+  ]
+}

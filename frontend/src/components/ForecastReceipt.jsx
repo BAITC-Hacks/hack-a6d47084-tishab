@@ -22,6 +22,8 @@ export default function ForecastReceipt({ forecast }) {
         <div><dt>{t("Model version")}</dt><dd>{show(p.model_version)}</dd></div>
         <div><dt>{t("Feature version")}</dt><dd>{show(p.feature_version)}</dd></div>
         <div><dt>{t("Future observations")}</dt><dd>{p.future_information_used ? t("YES") : t("NO")}</dd></div>
+        {p.availability_basis && <div><dt>{t("Availability basis")}</dt><dd>{t(p.availability_basis)}</dd></div>}
+        {p.model_cutoff && <div><dt>{t("Model cutoff")}</dt><dd>{date(p.model_cutoff)}</dd></div>}
       </dl>
     </article>
   );

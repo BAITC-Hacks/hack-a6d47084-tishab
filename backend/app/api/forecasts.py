@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.db.repository import ForecastRepository
+from app.config import Settings, get_settings
 from app.dependencies import get_forecast_service, get_repository
 from app.integrations.errors import ProviderUnavailableError
 from app.schemas.agent import AgentResult
@@ -30,8 +31,24 @@ def _get_or_404(repository: ForecastRepository, forecast_id: str) -> ForecastDet
 def run_forecast(
     request: ForecastRequest,
     service: ForecastService = Depends(get_forecast_service),
+    repository: ForecastRepository = Depends(get_repository),
+    settings: Settings = Depends(get_settings),
 ) -> ForecastDetail:
     try:
+        modes = (settings.forecast_provider, settings.weather_provider, settings.agent_provider)
+        integrated = request.mode == "integrated" or (request.mode == "configured" and all(mode == "real" for mode in modes))
+        if integrated:
+            if request.horizon_hours != 48 or request.scenario.value != "normal":
+                raise HTTPException(422, "Integrated mode supports 48 hours and the normal scenario only")
+            if request.issue_time.minute or request.issue_time.second or request.issue_time.microsecond:
+                raise HTTPException(422, "Integrated issue time must be an exact UTC hour")
+            from app.services.integrated_forecast_service import IntegratedForecastService
+            return IntegratedForecastService(repository, settings).run(request)
+        if request.mode == "mock":
+            from app.integrations.agent.mock import MockAgentProvider
+            from app.integrations.forecast.mock import MockForecastProvider
+            from app.integrations.weather.mock import MockWeatherProvider
+            service = ForecastService(repository, MockForecastProvider(), MockWeatherProvider(), MockAgentProvider())
         return service.run(request)
     except ProviderUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

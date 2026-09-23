@@ -1,5 +1,48 @@
 // English source text is the stable key; unknown provider text stays unchanged.
 export const messages = {
+  "Saved January 2026 holdout: power curve and persistence, not LightGBM or the organizer metric. nMAE and chart series are not supplied.": {"ru":"Сохранённая проверка за январь 2026: power curve и persistence. Это не оценка LightGBM и не метрика организаторов. nMAE и ряды для графика не переданы.","kk":"2026 жылғы қаңтардағы сақталған тексеру: power curve және persistence. Бұл LightGBM бағасы да, ұйымдастырушылар метрикасы да емес. nMAE және график қатарлары берілмеген."},
+  "Demo protection check: this rejection is intentional. Select ML + agent for a real forecast.": {"ru":"Демо-проверка защиты: отклонение намеренное. Для реального прогноза выберите «ML + агент» и запустите расчёт.","kk":"Қорғаныстың демо тексеруі: болжам әдейі қабылданбаған. Нақты болжам үшін «ML + агент» режимін таңдап, есепті іске қосыңыз."},
+  "Run mode": {"ru":"Режим запуска","kk":"Іске қосу режимі"},
+  "ML + agent": {"ru":"ML + агент","kk":"ML + агент"},
+  "Demo scenarios": {"ru":"Демо-сценарии","kk":"Демо сценарийлер"},
+  "Issue time (UTC)": {"ru":"Время выпуска (UTC)","kk":"Шығарылған уақыты (UTC)"},
+  "Trained LightGBM · cached weather · 48 hours. LLM briefing is optional.": {"ru":"Обученная LightGBM · погода из кэша · 48 часов. LLM-сводка опциональна.","kk":"Үйретілген LightGBM · кэштегі ауа райы · 48 сағат. LLM түйіндемесі міндетті емес."},
+  "API online": {"ru":"API доступен","kk":"API қолжетімді"},
+  "Point forecast from trained LightGBM. P10/P90 are not supplied.": {"ru":"Точечный прогноз обученной LightGBM. Интервалы P10/P90 не рассчитаны.","kk":"Үйретілген LightGBM нүктелік болжамы. P10/P90 аралықтары есептелмеген."},
+  "Forecast blocked": {"ru":"Прогноз заблокирован","kk":"Болжам бұғатталды"},
+  "Validation failed. See the knowledge boundary and agent log; this run must not be published.": {"ru":"Проверка не пройдена. Причина — в границе данных и журнале агента; этот прогноз нельзя публиковать.","kk":"Тексеру сәтсіз өтті. Себебі деректер шекарасы мен агент журналында; бұл болжамды жариялауға болмайды."},
+  "First-hour prediction": {"ru":"Прогноз первого часа","kk":"Бірінші сағат болжамы"},
+  "Prediction": {"ru":"Прогноз","kk":"Болжам"},
+  "Availability basis": {"ru":"Основание доступности","kk":"Қолжетімділік негізі"},
+  "Model cutoff": {"ru":"Граница обучения","kk":"Оқыту шекарасы"},
+  "assumed:init+7h": {"ru":"Допущение: запуск + 7 часов","kk":"Болжам: іске қосылу + 7 сағат"},
+  "LLM briefing": {"ru":"Сводка LLM","kk":"LLM түйіндемесі"},
+  "Template briefing": {"ru":"Шаблонная сводка","kk":"Үлгілік түйіндеме"},
+  "llm_off": {"ru":"LLM выключена","kk":"LLM өшірілген"},
+  "missing_api_key": {"ru":"API-ключ не задан","kk":"API кілті берілмеген"},
+  "missing_model": {"ru":"LLM-модель не задана","kk":"LLM моделі берілмеген"},
+  "grounding_guard_failed": {"ru":"Ответ LLM не прошёл проверку фактов","kk":"LLM жауабы фактілер тексеруінен өтпеді"},
+  "grounding_guard_passed": {"ru":"Проверка чисел пройдена","kk":"Сандар тексеруден өтті"},
+  "llm_request_failed": {"ru":"LLM недоступна — использован шаблон","kk":"LLM қолжетімсіз — үлгі қолданылды"},
+  "PUBLISH": {"ru":"ОПУБЛИКОВАТЬ","kk":"ЖАРИЯЛАУ"},
+  "REJECT": {"ru":"ОТКЛОНИТЬ","kk":"ҚАБЫЛДАМАУ"},
+  "first_publication": {"ru":"Первая публикация","kk":"Алғашқы жариялау"},
+  "no_published_overlap": {"ru":"Нет общих часов с прошлым прогнозом","kk":"Алдыңғы болжаммен ортақ сағаттар жоқ"},
+  "energy_change_ge_threshold": {"ru":"Изменение достигло порога публикации","kk":"Өзгеріс жариялау шегіне жетті"},
+  "energy_change_below_threshold": {"ru":"Изменение ниже порога — сохранено без публикации","kk":"Өзгеріс шектен төмен — жарияламай сақталды"},
+  "no_legal_weather": {"ru":"Нет доступной архивной погоды для этого выпуска","kk":"Осы шығарылымға қолжетімді архивтік ауа райы жоқ"},
+  "model_cutoff_after_issue": {"ru":"Модель обучена на данных после времени выпуска","kk":"Модель шығарылым уақытынан кейінгі деректермен оқытылған"},
+  "future_weather": {"ru":"Погода ещё не была доступна на момент выпуска","kk":"Ауа райы шығарылған сәтте әлі қолжетімсіз болған"},
+  "cutoff_unknown": {"ru":"Неизвестна граница обучения модели","kk":"Модельдің оқыту шекарасы белгісіз"},
+  "select_weather": {"ru":"Выбор погоды","kk":"Ауа райын таңдау"},
+  "leakage_check": {"ru":"Проверка утечки","kk":"Дерек ағып кетуін тексеру"},
+  "fetch_weather": {"ru":"Загрузка погоды","kk":"Ауа райын жүктеу"},
+  "validate_weather": {"ru":"Проверка погоды","kk":"Ауа райын тексеру"},
+  "predict": {"ru":"Расчёт прогноза","kk":"Болжамды есептеу"},
+  "validate_forecast": {"ru":"Проверка прогноза","kk":"Болжамды тексеру"},
+  "decide": {"ru":"Решение","kk":"Шешім"},
+  "store": {"ru":"Сохранение","kk":"Сақтау"},
+  "brief": {"ru":"Сводка","kk":"Түйіндеме"},
   "Overview": {
     "ru": "Обзор",
     "kk": "Шолу"
@@ -734,4 +777,3 @@ export function formatNumber(language, value) {
     ? new Intl.NumberFormat(locales[normalizeLanguage(language)], { maximumFractionDigits: 3 }).format(value)
     : value;
 }
-

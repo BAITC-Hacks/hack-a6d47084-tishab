@@ -36,9 +36,7 @@ export default function App() {
     localStorage.setItem("windline-theme", theme);
   }, [theme]);
 
-  const providerMode = health
-    ? Object.values(health.providers).every((mode) => mode === "mock") ? t("Mock grid") : t("Hybrid grid")
-    : t("Offline");
+  const providerMode = health ? t("API online") : t("Offline");
 
   return (
     <div className="app-shell">

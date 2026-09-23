@@ -20,7 +20,7 @@ app = FastAPI(
     version="0.1.0",
     description=(
         "Web and integration layer for vintage-aware wind power forecasts. "
-        "The API does not implement scientific forecasting or LLM logic."
+        "Integrated mode invokes the M1/M2 LightGBM and agent runtime; mock mode is retained for UI demos."
     ),
     lifespan=lifespan,
 )

@@ -17,15 +17,18 @@ import { useForecast } from "../hooks/useForecast";
 export function ForecastWorkspace({ forecast }) {
   const { t, date, number } = useI18n();
   const turbines = useMemo(() => Array.from(new Set(forecast.points.map((point) => point.turbine_id))), [forecast]);
-  const [selected, setSelected] = useState(turbines.includes("PLANT") ? "PLANT" : turbines[0]);
+  const [selection, setSelected] = useState(null);
+  const selected = turbines.includes(selection) ? selection : turbines.includes("PLANT") ? "PLANT" : turbines[0];
   const points = forecast.points.filter((point) => point.turbine_id === selected);
   const latestPoint = points[0];
   const rejected = forecast.status === "rejected";
+  const hasUncertainty = forecast.provenance.uncertainty_available !== false;
 
   return (
     <div className="forecast-workspace">
       {forecast.is_mock && <div className="demo-banner"><span>{t("MOCK MODE")}</span> {t("Synthetic data for integration and UI testing only.")}</div>}
-      {rejected && <div className="integrity-banner"><strong>{t("Protection worked as designed")}</strong><span>{t("This demo run intentionally contains weather unavailable at issue time. Publication was blocked before future information could be used.")}</span></div>}
+      {!forecast.is_mock && <div className="demo-banner"><span>{t("ML + agent")}</span> {t("Point forecast from trained LightGBM. P10/P90 are not supplied.")}</div>}
+      {rejected && <div className="integrity-banner"><strong>{t("Forecast blocked")}</strong><span>{t(forecast.is_mock ? "This demo run intentionally contains weather unavailable at issue time. Publication was blocked before future information could be used." : "Validation failed. See the knowledge boundary and agent log; this run must not be published.")}</span></div>}
       <section className="page-heading compact-heading">
         <div><span className="eyebrow">{t("Current run")}</span><h1>{t("Wind power forecast")}</h1><p>{t("Vintage-aware output with uncertainty, provenance and decisions.")}</p></div>
         <StatusBadge status={forecast.status} />
@@ -33,7 +36,7 @@ export function ForecastWorkspace({ forecast }) {
       <section className="metrics-grid">
         <MetricCard label={t("Issue time")} value={date(forecast.issue_time)} />
         <MetricCard label={t("Horizon")} value={t("{hours} hours", { hours: forecast.horizon_hours })} />
-        <MetricCard label={t("First-hour P50")} value={number(latestPoint?.p50)} hint={t(selected)} />
+        <MetricCard label={t(hasUncertainty ? "First-hour P50" : "First-hour prediction")} value={number(latestPoint?.p50)} hint={t(selected)} />
         <MetricCard label={t("Integrity")} value={rejected ? t("BLOCKED") : t(forecast.integrity_status.toUpperCase())} />
         <MetricCard label={t("Agent")} value={t(forecast.agent.status.toUpperCase())} />
       </section>
@@ -47,7 +50,7 @@ export function ForecastWorkspace({ forecast }) {
         <ForecastChart points={points} />
       </section>
       <section className="two-column">
-        <KnowledgeBoundary boundary={forecast.knowledge_boundary} />
+        <KnowledgeBoundary boundary={forecast.knowledge_boundary} isMock={forecast.is_mock} />
         <ForecastReceipt forecast={forecast} />
       </section>
       <section className="panel">

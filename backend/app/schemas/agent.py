@@ -12,3 +12,5 @@ class AgentResult(StrictModel):
     fallback: str | None = None
     activity: list[AgentEvent] = Field(default_factory=list)
     is_mock: bool = False
+    llm_used: bool = False
+    briefing_reason: str | None = None
