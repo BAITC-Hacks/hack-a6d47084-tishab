@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from m1.features import KEYS, attach_weather, build_examples, feature_columns, split_issues
+from m1.features import KEYS, attach_weather, build_examples, feature_columns, split_issues, weather_only_examples
 from m1.forecasting import M1Forecaster
 from m1.scada import aggregate_scada
 from m1.weather import WEATHER_CONTRACT_VERSION, read_weather_vintages
@@ -146,6 +146,21 @@ def test_weather_features_train_and_predict_end_to_end(tmp_path: Path) -> None:
     assert (predictions["forecast_time"] == predictions["issue_time"] + pd.to_timedelta(predictions["lead_time"], unit="h")).all()
     assert predictions["prediction"].between(0, 1).all()
     assert set(KEYS + ["prediction", "model_name", "model_version", "weather_run_id", "available_at"]).issubset(predictions)
+
+
+def test_weather_only_model_needs_no_scada_history_at_inference(tmp_path: Path) -> None:
+    hourly = hourly_frame(480, timezone="UTC")
+    issues = pd.date_range("2025-01-09", periods=4, freq="D", tz="UTC")
+    history_examples = build_examples(hourly, issues, horizon=48)
+    path = tmp_path / "weather_vintages.parquet"
+    synthetic_m2_weather(history_examples).to_parquet(path, index=False)
+    weather = read_weather_vintages(path)
+    prepared = weather_only_examples(weather, hourly)
+    model = M1Forecaster("weather-only-test-v1").train(prepared, hourly, feature_mode="weather_only")
+    future = weather_only_examples(weather.loc[weather["issue_time"].eq(issues[-1])])
+    predictions = model.predict(future)
+    assert len(predictions) == 96
+    assert not any(name in model.columns for name in ("recent_power", "recent_wind", "power_mean_24h"))
 
 
 def test_time_split_has_no_target_overlap() -> None:

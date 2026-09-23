@@ -39,11 +39,13 @@ class M1Forecaster:
         self.global_mean: float = float("nan")
         self.metadata: dict = {}
 
-    def train(self, examples: pd.DataFrame, hourly_history: pd.DataFrame) -> "M1Forecaster":
+    def train(
+        self, examples: pd.DataFrame, hourly_history: pd.DataFrame, feature_mode: str = "history",
+    ) -> "M1Forecaster":
         training = examples.loc[examples["target"].notna()].copy()
         if training.empty:
             raise ValueError("No observed training targets")
-        self.columns = feature_columns(training)
+        self.columns = feature_columns(training, feature_mode)
         if training[self.columns].isna().all().any():
             empty = training[self.columns].columns[training[self.columns].isna().all()].tolist()
             raise ValueError(f"Features wholly missing: {empty}")
@@ -72,6 +74,7 @@ class M1Forecaster:
             "config": MODEL_CONFIG,
             "created_at_utc": datetime.now(timezone.utc).isoformat(),
             "weather_features": [c for c in self.columns if c.startswith("wx_")],
+            "feature_mode": feature_mode,
             "timestamp_convention": "naive; SCADA source timezone TBD; issue and M2 weather must match",
         }
         return self
@@ -82,7 +85,7 @@ class M1Forecaster:
         missing = set(self.columns) - set(examples.columns)
         if missing:
             raise ValueError(f"Missing model features: {sorted(missing)}")
-        current = feature_columns(examples)
+        current = feature_columns(examples, self.metadata.get("feature_mode", "history"))
         if current != self.columns:
             raise ValueError(f"Feature schema mismatch: artifact={self.columns}, input={current}")
         if examples[KEYS].isna().any().any() or examples.duplicated(KEYS).any():
@@ -96,8 +99,11 @@ class M1Forecaster:
             values.append(value if value is not None else self.turbine_mean.get(turbine, self.global_mean))
         return np.asarray(values, dtype=float)
 
-    def predict(self, examples: pd.DataFrame, models: tuple[str, ...] = ("lightgbm", "persistence", "climatology")) -> pd.DataFrame:
+    def predict(self, examples: pd.DataFrame, models: tuple[str, ...] | None = None) -> pd.DataFrame:
         self._check_features(examples)
+        if models is None:
+            models = (("lightgbm",) if self.metadata.get("feature_mode") == "weather_only"
+                      else ("lightgbm", "persistence", "climatology"))
         provenance = [c for c in PROVENANCE + OPTIONAL_PROVENANCE if c in examples.columns]
         base = examples[KEYS + provenance].copy()
         climo = self._climatology(examples)

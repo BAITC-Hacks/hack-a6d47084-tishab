@@ -20,6 +20,9 @@ BASE_FEATURES = [
     "recent_wind", "wind_mean_24h", "recent_temperature", "temperature_mean_24h",
     "observed_hours_24h",
 ]
+WEATHER_ONLY_BASE_FEATURES = [
+    "turbine_code", "lead_time", "target_hour", "target_month", "target_dayofweek",
+]
 
 
 def daily_issues(hourly: pd.DataFrame, horizon: int = 48, issue_hour: int = 23) -> pd.DatetimeIndex:
@@ -140,8 +143,34 @@ def attach_weather(examples: pd.DataFrame, weather: pd.DataFrame, require_all: b
     return merged
 
 
-def feature_columns(examples: pd.DataFrame) -> list[str]:
-    columns = BASE_FEATURES + [c for c in ALLOWED_WEATHER if c in examples.columns and c != "wx_wind_direction"]
+def weather_only_examples(
+    weather: pd.DataFrame, hourly_targets: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    """Build ML rows solely from M2 weather; SCADA is used only as an optional target."""
+    weather_features = [c for c in ALLOWED_WEATHER if c in weather.columns]
+    selected = weather[KEYS + PROVENANCE + weather_features].copy()
+    if selected[KEYS].isna().any().any() or selected.duplicated(KEYS).any():
+        raise ValueError("M2 weather keys must be non-null and unique")
+    target_time = pd.to_datetime(selected["forecast_time"])
+    selected["target_hour"] = target_time.dt.hour
+    selected["target_month"] = target_time.dt.month
+    selected["target_dayofweek"] = target_time.dt.dayofweek
+    selected["turbine_code"] = selected["turbine_id"].map({"T1": 1, "T2": 2}).astype("int8")
+    if "wx_wind_direction" in selected:
+        radians = np.deg2rad(selected["wx_wind_direction"])
+        selected["wx_direction_sin"] = np.sin(radians)
+        selected["wx_direction_cos"] = np.cos(radians)
+    if hourly_targets is not None:
+        targets = hourly_targets[["hour_start", "turbine_id", "power"]].rename(
+            columns={"hour_start": "forecast_time", "power": "target"}
+        )
+        selected = selected.merge(targets, on=["forecast_time", "turbine_id"], how="left", validate="many_to_one")
+    return selected.sort_values(KEYS).reset_index(drop=True)
+
+
+def feature_columns(examples: pd.DataFrame, mode: str = "history") -> list[str]:
+    base = WEATHER_ONLY_BASE_FEATURES if mode == "weather_only" else BASE_FEATURES
+    columns = base + [c for c in ALLOWED_WEATHER if c in examples.columns and c != "wx_wind_direction"]
     if "wx_wind_direction" in examples.columns:
         columns += ["wx_direction_sin", "wx_direction_cos"]
     return columns
