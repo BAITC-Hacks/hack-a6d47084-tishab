@@ -38,8 +38,8 @@ def run_forecast(
         modes = (settings.forecast_provider, settings.weather_provider, settings.agent_provider)
         integrated = request.mode == "integrated" or (request.mode == "configured" and all(mode == "real" for mode in modes))
         if integrated:
-            if request.horizon_hours != 48 or request.scenario.value != "normal":
-                raise HTTPException(422, "Integrated mode supports 48 hours and the normal scenario only")
+            if request.scenario.value != "normal":
+                raise HTTPException(422, "Integrated mode supports the normal scenario only")
             if request.issue_time.minute or request.issue_time.second or request.issue_time.microsecond:
                 raise HTTPException(422, "Integrated issue time must be an exact UTC hour")
             from app.services.integrated_forecast_service import IntegratedForecastService

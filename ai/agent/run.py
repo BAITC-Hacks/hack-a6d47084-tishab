@@ -31,15 +31,15 @@ PHYSICS_TOLERANCE = 0.4
 FORECAST_COLUMNS = ["forecast_time", "turbine_id", "p50", "model_version"]
 
 
-def horizon(issue: pd.Timestamp) -> pd.DatetimeIndex:
-    return pd.date_range(issue + pd.Timedelta(hours=1), periods=config.HORIZON_HOURS, freq="h")
+def horizon(issue: pd.Timestamp, hours: int = 48) -> pd.DatetimeIndex:
+    return pd.date_range(issue + pd.Timedelta(hours=1), periods=hours, freq="h")
 
 
-def validate_weather(window: pd.DataFrame, issue: pd.Timestamp) -> dict:
+def validate_weather(window: pd.DataFrame, issue: pd.Timestamp, horizon_hours: int = 48) -> dict:
     errors, warnings = [], []
     if window.index.tz is None:
         errors.append("naive_weather_time")
-    if not window.index.equals(horizon(issue)):
+    if not window.index.equals(horizon(issue, horizon_hours)):
         errors.append("weather_horizon_mismatch")
     for variable in config.WEATHER_VARIABLES:
         if variable not in window:
@@ -62,7 +62,7 @@ def validate_weather(window: pd.DataFrame, issue: pd.Timestamp) -> dict:
 
 
 def validate_forecast(forecast: pd.DataFrame, weather: pd.DataFrame, issue: pd.Timestamp,
-                      physics=None, tolerance: float = PHYSICS_TOLERANCE) -> dict:
+                      physics=None, tolerance: float = PHYSICS_TOLERANCE, horizon_hours: int = 48) -> dict:
     errors, warnings = [], []
     if not set(FORECAST_COLUMNS) <= set(forecast.columns):
         return {"errors": ["missing_forecast_columns"], "warnings": []}
@@ -78,7 +78,7 @@ def validate_forecast(forecast: pd.DataFrame, weather: pd.DataFrame, issue: pd.T
         errors.append("turbines_mismatch")
     for turbine in config.TURBINES:
         times = pd.DatetimeIndex(forecast.loc[forecast.turbine_id.eq(turbine), "forecast_time"]).sort_values()
-        if not times.equals(horizon(issue)):
+        if not times.equals(horizon(issue, horizon_hours)):
             errors.append(f"forecast_horizon_mismatch:{turbine}")
     if not errors and physics is not None:
         paired = forecast.merge(weather, on=["forecast_time", "turbine_id"], validate="one_to_one")
@@ -105,7 +105,9 @@ def facts_for(receipt: dict, forecast: pd.DataFrame | None) -> dict:
 
 def run_issue(issue_time, predictor: Predictor, store: Store, *, offline: bool = False,
               llm_mode: str = "off", force_run=None, fetch: Callable | None = None,
-              physics_tolerance: float = PHYSICS_TOLERANCE) -> dict:
+              physics_tolerance: float = PHYSICS_TOLERANCE, horizon_hours: int = 48) -> dict:
+    if horizon_hours not in (24, 48):
+        raise ValueError("horizon_hours must be 24 or 48")
     issue = to_utc(issue_time)
     if pd.isna(issue) or issue != issue.floor("h"):
         raise ValueError("issue_time must be an exact UTC hour")
@@ -120,15 +122,11 @@ def run_issue(issue_time, predictor: Predictor, store: Store, *, offline: bool =
             cutoff = None
     except (ValueError, TypeError):
         cutoff = None
-    existing = (store.existing(issue, model_version, forced.run_id if forced else None)
+    existing = (store.existing(issue, model_version, forced.run_id if forced else None, horizon_hours)
                 if cutoff is not None and cutoff <= issue else None)
     if existing and existing.get("model_cutoff") != cutoff.isoformat():
         existing = None
-    if existing and not forced:
-        # Replaying into the same directory is idempotent.
-        store.log(issue, "store", "reused", {"forecast_id": existing["forecast_id"]})
-        return existing
-    receipt = {"issue_time": issue.isoformat(), "weather_run_id": None, "run_init_time": None,
+    receipt = {"issue_time": issue.isoformat(), "horizon_hours": horizon_hours, "weather_run_id": None, "run_init_time": None,
                "available_at": None, "availability_basis": None, "model_version": model_version or "unknown",
                "model_cutoff": None, "offline": offline, "force_run": forced.run_id if forced else None,
                "leakage_check": "not_checked", "skipped_runs": [],
@@ -165,8 +163,8 @@ def run_issue(issue_time, predictor: Predictor, store: Store, *, offline: bool =
         else:
             raw = raw.copy()
             raw.index = raw.index.tz_convert("UTC")
-            window = raw.reindex(horizon(issue))
-            validation = validate_weather(window, issue)
+            window = raw.reindex(horizon(issue, horizon_hours))
+            validation = validate_weather(window, issue, horizon_hours)
         receipt["validation"]["weather"] = validation
         store.log(issue, "validate_weather", "rejected" if validation["errors"] else "ok", validation)
         if validation["errors"]:
@@ -192,12 +190,16 @@ def run_issue(issue_time, predictor: Predictor, store: Store, *, offline: bool =
                 receipt["leakage_check"] = "rejected"
                 store.log(issue, "leakage_check", "rejected", {"reason": errors[-1], "model_cutoff": cutoff.isoformat()})
         if not errors:
+            if (existing and not forced and existing.get("decision") != "REJECT"
+                    and existing.get("weather_run_id") == chosen.run_id):
+                store.log(issue, "store", "reused", {"forecast_id": existing["forecast_id"]})
+                return existing
             try:
                 assert_legal(chosen, issue)
                 forecast = predictor.predict(weather_rows.copy())
                 store.log(issue, "predict", "ok", {"rows": len(forecast)})
                 physics = PowerCurveModel.load(config.ROOT / "models" / "power_curve_v1.json")
-                validation = validate_forecast(forecast, weather_rows, issue, physics, physics_tolerance)
+                validation = validate_forecast(forecast, weather_rows, issue, physics, physics_tolerance, horizon_hours)
                 receipt["validation"]["forecast"] = validation
                 errors.extend(validation["errors"])
                 store.log(issue, "validate_forecast", "rejected" if errors else "ok", validation)
@@ -205,7 +207,7 @@ def run_issue(issue_time, predictor: Predictor, store: Store, *, offline: bool =
                     receipt["model_version"] = str(forecast.model_version.iloc[0])
                     forecast = forecast[FORECAST_COLUMNS].copy()
                     if model_version is None and not forced:
-                        existing = store.existing(issue, receipt["model_version"], None)
+                        existing = store.existing(issue, receipt["model_version"], None, horizon_hours)
                         if existing:
                             store.log(issue, "store", "reused", {"forecast_id": existing["forecast_id"]})
                             return existing
@@ -219,7 +221,8 @@ def run_issue(issue_time, predictor: Predictor, store: Store, *, offline: bool =
         decision["reason"] = errors[0]
     receipt.update(decision)
     receipt["status"] = {"PUBLISH": "published", "SHADOW": "shadow", "REJECT": "rejected"}[receipt["decision"]]
-    receipt["forecast_id"] = f"F-{issue:%Y%m%dT%H}Z-{receipt['model_version']}-v{receipt['version']}"
+    weather_stamp = chosen.init_time.strftime("%Y%m%dT%H") if chosen else "none"
+    receipt["forecast_id"] = f"F-{issue:%Y%m%dT%H}Z-{receipt['model_version']}-h{horizon_hours}-w{weather_stamp}-v{receipt['version']}"
     store.log(issue, "decide", receipt["decision"], decision)
     store.save(forecast, receipt)
     store.log(issue, "store", "ok", {"forecast_id": receipt["forecast_id"], "decision": receipt["decision"]})
@@ -251,6 +254,7 @@ def main(argv=None) -> None:
     mode.add_argument("--replay", nargs=2)
     parser.add_argument("--llm", choices=["on", "off"], default="off")
     parser.add_argument("--offline", action="store_true")
+    parser.add_argument("--horizon", type=int, choices=[24, 48], default=48)
     parser.add_argument("--revisions", choices=["on", "off"], default="on")
     parser.add_argument("--force-run")
     parser.add_argument("--out", type=Path, default=config.ROOT / "outputs")
@@ -263,7 +267,7 @@ def main(argv=None) -> None:
     if not np.isfinite(args.physics_tolerance) or args.physics_tolerance < 0:
         parser.error("--physics-tolerance must be finite and nonnegative")
     predictor = load_predictor(args.model, predictor=args.predictor)
-    store = Store(args.out)
+    store = Store(args.out / f"h{args.horizon}")
     if args.replay:
         issues = issue_schedule(*args.replay, revisions=args.revisions == "on")
     else:
@@ -274,7 +278,8 @@ def main(argv=None) -> None:
     results = []
     for issue in issues:
         receipt = run_issue(issue, predictor, store, offline=args.offline, llm_mode=args.llm,
-                            force_run=args.force_run, physics_tolerance=args.physics_tolerance)
+                            force_run=args.force_run, physics_tolerance=args.physics_tolerance,
+                            horizon_hours=args.horizon)
         results.append(receipt)
         print(f"{issue.isoformat()} {receipt['decision']} {receipt['reason']} {receipt['forecast_id']}", flush=True)
         if not args.replay:

@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     weather_provider: Literal["mock", "real"] = "mock"
     agent_provider: Literal["mock", "real"] = "mock"
     integrated_llm: Literal["off", "on"] = "off"
+    integrated_offline: bool = False
     integrated_output_dir: Path = Path(__file__).resolve().parents[2] / "outputs" / "web"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

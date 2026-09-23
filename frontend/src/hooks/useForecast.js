@@ -13,7 +13,7 @@ export function useForecast(forecastId = null) {
     try {
       const runs = await api.listForecasts();
       setHistory(runs);
-      const selectedId = forecastId || runs[0]?.forecast_id;
+      const selectedId = forecastId || runs.find((item) => !item.is_mock)?.forecast_id || runs[0]?.forecast_id;
       setForecast(selectedId ? await api.getForecast(selectedId) : null);
     } catch (requestError) {
       setError(requestError.message);

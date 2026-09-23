@@ -24,7 +24,7 @@ export default function Dashboard() {
   const submit = async (event) => {
     event.preventDefault();
     try {
-      await run({ mode, issue_time: new Date(mode === "integrated" ? `${issueTime}Z` : issueTime).toISOString(), horizon_hours: mode === "integrated" ? 48 : Number(horizon), scenario: mode === "integrated" ? "normal" : scenario });
+      await run({ mode, issue_time: new Date(mode === "integrated" ? `${issueTime}Z` : issueTime).toISOString(), horizon_hours: Number(horizon), scenario: mode === "integrated" ? "normal" : scenario });
     } catch {
       // The hook exposes the backend error as a visible page state.
     }
@@ -49,7 +49,7 @@ export default function Dashboard() {
           <label>{t("Run mode")}<select value={mode} onChange={(event) => { setMode(event.target.value); setHorizon(48); setScenario("normal"); }}><option value="integrated">{t("ML + agent")}</option><option value="mock">{t("Demo scenarios")}</option></select></label>
           <label>{t(mode === "integrated" ? "Issue time (UTC)" : "Issue time")}<input type="datetime-local" step={mode === "integrated" ? 3600 : 60} value={issueTime} onChange={(event) => setIssueTime(event.target.value)} required /></label>
           <div className="form-row">
-            <label>{t("Horizon")}<select value={horizon} disabled={mode === "integrated"} onChange={(event) => setHorizon(event.target.value)}><option value="24">{t("24 hours")}</option><option value="48">{t("48 hours")}</option></select></label>
+            <label>{t("Horizon")}<select value={horizon} onChange={(event) => setHorizon(event.target.value)}><option value="24">{t("24 hours")}</option><option value="48">{t("48 hours")}</option></select></label>
             {mode === "mock" && <label>{t("Scenario")}<select value={scenario} onChange={(event) => setScenario(event.target.value)}>{SCENARIOS.map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>}
           </div>
           <button className="primary-button" type="submit" disabled={loading}><span>{loading ? t("Running pipeline…") : t("Launch forecast")}</span><b>→</b></button>

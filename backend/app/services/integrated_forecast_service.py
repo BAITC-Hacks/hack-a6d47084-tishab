@@ -65,16 +65,16 @@ class IntegratedForecastService:
 
         def fetch(run):
             nonlocal weather_frame
-            weather_frame = fetch_run(run, offline=True)
+            weather_frame = fetch_run(run, offline=self.settings.integrated_offline)
             return weather_frame
 
         with _RUNTIME_LOCK:
             try:
                 # Separate LLM-off/on stores prevent reuse of an old template when LLM is enabled.
-                store = CaptureStore(self.settings.integrated_output_dir / self.settings.integrated_llm)
+                store = CaptureStore(self.settings.integrated_output_dir / self.settings.integrated_llm / f"h{request.horizon_hours}")
                 predictor = M1Predictor(directory=ROOT)
-                receipt = run_issue(request.issue_time, predictor, store, offline=True,
-                                    llm_mode=self.settings.integrated_llm, fetch=fetch)
+                receipt = run_issue(request.issue_time, predictor, store, offline=self.settings.integrated_offline,
+                                    llm_mode=self.settings.integrated_llm, fetch=fetch, horizon_hours=request.horizon_hours)
                 identifier = web_id(receipt["forecast_id"], self.settings.integrated_llm)
                 try:
                     return self.repository.get(identifier)
@@ -96,11 +96,11 @@ class IntegratedForecastService:
                 # On idempotent reuse by another DB, weather can be reconstructed from receipt metadata.
                 if weather_frame is None and receipt.get("run_init_time") and receipt["decision"] != "REJECT":
                     from ai.weather.vintage import WeatherRun
-                    weather_frame = fetch_run(WeatherRun.from_init(pd.Timestamp(receipt["run_init_time"])), offline=True)
+                    weather_frame = fetch_run(WeatherRun.from_init(pd.Timestamp(receipt["run_init_time"])), offline=self.settings.integrated_offline)
                 hourly = []
                 if weather_frame is not None and receipt["decision"] != "REJECT":
                     for stamp, row in weather_frame.iterrows():
-                        if request.issue_time < stamp <= pd.Timestamp(request.issue_time) + pd.Timedelta(hours=48):
+                        if request.issue_time < stamp <= pd.Timestamp(request.issue_time) + pd.Timedelta(hours=request.horizon_hours):
                             def value(key):
                                 item = row.get(key)
                                 return float(item) if pd.notna(item) else None
@@ -157,7 +157,7 @@ class IntegratedForecastService:
                     uncertainty_available=False,
                 )
                 detail = ForecastDetail(
-                    forecast_id=identifier, issue_time=request.issue_time, horizon_hours=48,
+                    forecast_id=identifier, issue_time=request.issue_time, horizon_hours=request.horizon_hours,
                     version=receipt["version"], status=receipt["status"], model_name="lightgbm",
                     integrity_status=boundary.status, created_at=now, is_mock=False,
                     points=points, models=[ModelDescriptor(name="lightgbm", type="ml")],

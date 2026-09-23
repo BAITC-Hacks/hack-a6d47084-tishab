@@ -87,7 +87,8 @@ class M1Predictor:
                 weather_rows.to_parquet(weather, index=False)
                 process = subprocess.run(
                     [sys.executable, "scripts/predict.py", "--weather", str(weather),
-                     "--issue-time", issue.isoformat(), "--artifact-dir", self.artifact_dir, "--output", str(output)],
+                     "--issue-time", issue.isoformat(), "--artifact-dir", self.artifact_dir,
+                     "--horizon", str(int(weather_rows.lead_time_h.max())), "--output", str(output)],
                     cwd=self.directory, capture_output=True, text=True, timeout=self.timeout,
                 )
                 if process.returncode:

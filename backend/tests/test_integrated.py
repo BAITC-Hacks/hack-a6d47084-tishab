@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.fixture
 def integrated_settings(tmp_path):
-    settings = Settings(integrated_output_dir=tmp_path / "runs", integrated_llm="off")
+    settings = Settings(integrated_output_dir=tmp_path / "runs", integrated_llm="off", integrated_offline=True)
     app.dependency_overrides[get_settings] = lambda: settings
     yield settings
     app.dependency_overrides.pop(get_settings, None)
@@ -53,7 +53,7 @@ def test_handoff_matches_api_and_survives_storage(client, integrated_settings, t
 
 
 @pytest.mark.parametrize("extra", [
-    {"horizon_hours": 24}, {"scenario": "leakage"}, {"issue_time": "2026-02-10T07:15:00Z"},
+    {"horizon_hours": 12}, {"scenario": "leakage"}, {"issue_time": "2026-02-10T07:15:00Z"},
 ])
 def test_integrated_rejects_unsupported_inputs(client, integrated_settings, extra):
     payload = {"mode": "integrated", "issue_time": "2026-02-10T07:00:00Z", "horizon_hours": 48, **extra}
@@ -116,3 +116,16 @@ def test_backtest_uses_saved_metrics_without_inventing_scores(client):
     assert result["models"][0]["mae"] == report["metrics"][0]["mae"]
     assert all(row["nmae"] is None for row in result["models"])
     assert result["series"] == []
+
+
+def test_integrated_24_hours(client, integrated_settings):
+    result = client.post("/api/forecasts/run", json={
+        "mode": "integrated", "issue_time": "2026-02-11T07:00:00Z", "horizon_hours": 24,
+    })
+    assert result.status_code == 201, result.text
+    payload = result.json()
+    assert payload["status"] == "published"
+    assert payload["horizon_hours"] == 24
+    assert len(payload["points"]) == 48
+    assert max(point["lead_hours"] for point in payload["points"]) == 24
+    assert len(payload["weather"]["hourly"]) == 24

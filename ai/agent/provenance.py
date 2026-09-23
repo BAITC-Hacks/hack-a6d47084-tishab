@@ -36,12 +36,13 @@ class Store:
         latest = matching.sort_values(["issue_time", "forecast_id"]).forecast_id.iloc[-1]
         return table[table.forecast_id.eq(latest)]
 
-    def existing(self, issue: pd.Timestamp, model_version: str | None, force_run: str | None) -> dict | None:
+    def existing(self, issue: pd.Timestamp, model_version: str | None, force_run: str | None, horizon_hours: int = 48) -> dict | None:
         if model_version is None:
             return None
-        for path in sorted((self.root / "receipts").glob(f"F-{issue:%Y%m%dT%H}Z-{model_version}-v*.json")):
+        for path in sorted((self.root / "receipts").glob(f"F-{issue:%Y%m%dT%H}Z-{model_version}*-v*.json"), reverse=True):
             receipt = json.loads(path.read_text(encoding="utf-8"))
-            if receipt.get("force_run") == force_run:
+            if (receipt.get("force_run") == force_run and receipt.get("horizon_hours", 48) == horizon_hours
+                    and receipt.get("model_version") == model_version):
                 return receipt
         return None
 
