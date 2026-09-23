@@ -1,120 +1,265 @@
-# TISHAB — каркас решения для данных ветровых турбин
+# Agentic AI for Vintage-Aware Wind Power Forecasting
 
-## О проекте
+PoC web-системы прогнозирования почасовой нормализованной выработки двух ветровых турбин на горизонте 24–48 часов.
 
-Репозиторий содержит исходные измерения двух ветровых турбин и базовую структуру для разработки решения хакатона. Данные включают скорость ветра, нормализованную активную мощность и температуру окружающей среды с временной меткой. Они могут использоваться командой для анализа работы турбин и последующего построения модели или сервиса.
+> Forecast the future. Prove what information you used. Validate the result. Recompute when the evidence changes.
 
-Проект ориентирован на команду хакатона и экспертов, которым нужно воспроизводимо изучать временные ряды выработки ветровых турбин.
+## Problem
 
-## Что реализовано
+Диспетчеру ВЭС нужен не только численный прогноз, но и доказательство того, что при историческом replay система использовала лишь информацию, действительно доступную в момент выпуска прогноза. Web-слой объединяет выводы weather/data, forecasting и agent-модулей в один проверяемый operational view.
 
-На текущем этапе в репозитории есть:
+## Hackathon Case
 
-- два CSV-файла с измерениями для турбин;
-- описание структуры и ограничений исходных данных;
-- базовое разделение будущего решения на AI-, backend- и frontend-части.
+Исходные данные содержат 10-минутные измерения скорости ветра, нормализованной активной мощности и температуры двух турбин с 11.03.2023 по 31.01.2026. Закрытый тестовый период — февраль 2026.
 
-Исполняемая модель, API, пользовательский интерфейс, агентные сценарии и расчёт прогнозов в текущей версии **ещё не реализованы**.
-
-## Как предполагается использовать решение
-
-Текущий воспроизводимый сценарий — работа с исходными данными:
-
-1. Пользователь берёт один или оба файла из каталога `data/`.
-2. Выбирает записи по времени и использует скорость ветра, мощность и температуру в анализе.
-3. Результаты обработки в дальнейшем должны передаваться из `ai/` в `backend/`, а затем отображаться в `frontend/`.
-
-Последние два шага описывают назначение каркаса, а не реализованное взаимодействие компонентов.
-
-## Архитектура
+## Architecture
 
 ```text
-data/       Исходные CSV с измерениями двух турбин
-  |
-  v
-ai/         Будущая подготовка данных и модели
-  |
-  v
-backend/    Будущий API и прикладная оркестрация
-  |
-  v
-frontend/   Будущий пользовательский интерфейс
+React Frontend
+      ↓ HTTP
+FastAPI Backend
+      ↓
+Application / Integration Layer
+      ├── WeatherProvider  → team weather/data module
+      ├── ForecastProvider → team forecasting/ML module
+      └── AgentProvider    → team supervisor/LLM module
 ```
 
-| Каталог | Назначение | Статус |
+FastAPI — единственная точка доступа frontend. API не знает, как обучена модель, как выбран weather vintage и как устроен LLM. Провайдеры можно заменить без изменения React, публичных схем и структуры хранения.
+
+## Core No-Leakage Principle
+
+Научный модуль должен проверять условие `forecast_available_time <= issue_time`. Web-слой сам не принимает научное решение: он получает и сохраняет `knowledge_boundary` со статусом, признаком `future_information_used` и причиной. UI выделяет failed run как `FORECAST REJECTED`.
+
+## Forecasting Architecture
+
+Целевая P0-цепочка команды:
+
+```text
+SCADA + legal historical weather vintage
+                ↓
+        feature engineering
+                ↓
+             model
+                ↓
+          P10 / P50 / P90
+                ↓
+           validation
+                ↓
+        structured forecast
+```
+
+Эта цепочка не реализуется в FastAPI. Сейчас её контракт воспроизводит явно помеченный `MockForecastProvider`.
+
+## P0 Models
+
+Командная архитектура предусматривает LightGBM и baselines Persistence, Climatology и Power Curve. В текущем репозитории эти модели не реализованы и не интегрированы. Mock-сценарии используют их имена только для проверки динамического API/UI.
+
+## Optional P1 Models
+
+TFT, ensemble, bias correction и adaptive approaches необязательны. `model_predictions` — динамический объект, поэтому новые модели могут появиться без изменения публичного API и компонентов React.
+
+## Uncertainty
+
+Каждый `ForecastPoint` принимает готовые `p10`, `p50`, `p90` от forecasting provider. FastAPI и React не рассчитывают uncertainty; UI только отображает median forecast и диапазон.
+
+## Agentic AI
+
+`AgentProvider` возвращает структурированные `summary`, `decision`, `warnings`, `operator_message` и `activity`. LLM может интерпретировать состояние и координировать модули, но не генерирует numerical power forecast.
+
+## LLM-Off Mode
+
+Если agent недоступен, backend сохраняет численный forecast и возвращает `status: unavailable`, `fallback: deterministic`. Сценарий `agent_off` подтверждает, что интерфейс продолжает работать без LLM.
+
+## Compute vs Publish
+
+API поддерживает статусы `computed`, `shadow`, `published`, `superseded`, `rejected`, `failed`. Решение о recompute или publication приходит из внешнего core/agent-модуля; web-слой его не вычисляет.
+
+## Forecast Versioning
+
+Lineage хранится как версии одного forecast (`V1 → V2`) с `parent_version`, статусом, причиной revision и временем создания. Mock-сценарий `revision` показывает опубликованную V2 после superseded V1, но не имитирует реальный revision algorithm.
+
+## Provenance
+
+Forecast receipt содержит forecast ID/version, issue time/horizon, weather source/run/available time, model/version, feature version, future-information flag и integrity status. Все demo provenance явно помечены `is_mock: true` и баннером `MOCK MODE`.
+
+## FastAPI Backend
+
+Стек: Python, FastAPI, Pydantic, SQLAlchemy, SQLite. Backend состоит из API routers, application services, provider adapters и repository. SQLite хранит только web/application сущности:
+
+- `ForecastRun` — статус, issue time, version, weather, boundary, provenance, lineage;
+- `ForecastPoint` — turbine/time, P10/P50/P90, динамические model predictions;
+- `AgentEvent` — структурированная activity timeline;
+- `BacktestResult` — сериализованный результат внешнего evaluation module.
+
+Обученные модели в SQLite не хранятся.
+
+## React Frontend
+
+Стек: React, Vite, JavaScript, Recharts и собственный CSS без конкурирующих UI-библиотек. Реализованы dashboard с historical replay, P10/P50/P90 для Plant/T1/T2, dynamic model comparison, weather и knowledge-boundary panels, receipt/provenance, agent activity, LLM-off fallback, lineage, history и backtest table.
+
+## Interface Boundaries
+
+### Weather/Data → Forecasting
+
+Концептуальный контракт: `issue_time`, `forecast_time`, `turbine_id`, `weather_run_id`, wind values, direction, temperature, pressure и lead time. Не предоставленные поля остаются `null`.
+
+### Forecasting → Backend
+
+`forecast_time`, `lead_hours`, `turbine_id`, `p10`, `p50`, `p90`, `model_predictions`, model/version metadata и lineage. Backend не изменяет численные значения.
+
+### Agent → Backend
+
+Структурированные status, summary, decision, warnings, operator message и events. Сырой LLM-текст frontend не разбирает.
+
+### Backend → Frontend
+
+Стандартизованные forecast, weather, knowledge boundary, agent, provenance, lineage, revision и backtest resources.
+
+## API
+
+| Метод | Endpoint | Назначение |
 | --- | --- | --- |
-| `data/` | Исходные данные турбин и их описание | Добавлено |
-| `ai/` | Место для подготовки признаков, обучения и инференса | Каркас |
-| `backend/` | Место для API, валидации запросов и запуска AI-части | Каркас |
-| `frontend/` | Место для интерфейса визуализации результатов | Каркас |
+| GET | `/api/health` | Health и активные provider modes |
+| POST | `/api/forecasts/run` | Запуск provider flow и сохранение результата |
+| GET | `/api/forecasts` | История forecast runs |
+| GET | `/api/forecasts/{forecast_id}` | Полный forecast |
+| GET | `/api/forecasts/{forecast_id}/lineage` | Версии и publication history |
+| GET | `/api/forecasts/{forecast_id}/weather` | Weather context и boundary verdict |
+| GET | `/api/forecasts/{forecast_id}/agent` | Структурированный agent result |
+| GET | `/api/forecasts/{forecast_id}/events` | Agent/application timeline |
+| GET | `/api/backtests/latest` | Последний backtest или N/A placeholder |
 
-## Данные и интеграции
+Swagger: `http://localhost:8000/docs`.
 
-Используются только локальные CSV-файлы из `data/`. В репозитории нет конфигурации, исходного кода или ключей, которые подтверждали бы использование внешних API, облачных сервисов либо баз данных.
+## Mock Mode
 
-### Состав данных
+По умолчанию установлены `FORECAST_PROVIDER=mock`, `WEATHER_PROVIDER=mock`, `AGENT_PROVIDER=mock`.
 
-В обоих файлах есть следующие поля:
-
-| Поле | Смысл |
+| Сценарий | Что проверяет |
 | --- | --- |
-| `ID` | Идентификатор записи |
-| `Статистическое время` | Временная метка измерения |
-| `Средняя скорость ветра(m/s)` | Средняя скорость ветра, м/с |
-| `Нормализованная активная мощность` | Нормализованная активная мощность |
-| `Средняя температура окружающей среды(°C)` | Температура окружающей среды, °C |
+| `normal` | P10/P50/P90 и boundary PASS |
+| `baselines` | Dynamic Persistence, Power Curve, LightGBM names |
+| `revision` | Lineage V1 → V2 |
+| `leakage` | Boundary FAILED и rejected run |
+| `agent_off` | Forecast работает при недоступном agent |
+| `optional_models` | Optional TFT/ensemble без правок frontend |
 
-При прямой проверке файлов обнаружено:
+Mock-значения синтетические и не являются benchmark results.
 
-| Файл | Записей | Период | Пропусков в 10-минутной сетке |
-| --- | ---: | --- | ---: |
-| `turbine 1.csv` | 142 360 | 11.03.2023 00:00 — 31.01.2026 23:50 | 9 992 |
-| `turbine 2.csv` | 149 499 | 11.03.2023 00:00 — 31.01.2026 23:50 | 2 853 |
+## Integration Guide
 
-В файлах не найдено пустых ячеек или дублирующихся временных меток. Пропуски временной сетки нужно учитывать при дальнейшей обработке. Подробности находятся в [описании данных](data/README.md).
+Реальные модули подключаются в `backend/app/integrations/*/real.py`:
 
-## Технологии
+```python
+class ForecastProvider:
+    def run_forecast(self, issue_time, horizon_hours, scenario): ...
 
-Подтверждённые содержимым репозитория технологии:
+class WeatherProvider:
+    def get_weather_context(self, issue_time, horizon_hours, scenario): ...
 
-- Markdown для документации;
-- CSV для хранения исходных временных рядов;
-- Git и GitHub для управления версиями.
+class AgentProvider:
+    def process(self, forecast, weather, scenario): ...
+```
 
-Языки программирования, фреймворки, библиотеки, AI-модели, API и deployed-версия пока не добавлены.
+После реализации адаптеров переключите `.env` на `FORECAST_PROVIDER=real`, `WEATHER_PROVIDER=real`, `AGENT_PROVIDER=real`. До подключения real-адаптеры возвращают честный `503 unavailable`, а не fake forecast.
 
-## Установка и запуск
+## Backtesting
 
-Исполняемого приложения и зависимостей в этой версии нет. Чтобы получить проект и проверить исходные данные, достаточно Git:
+Web layer не вычисляет MAE/RMSE/nMAE. Пока evaluation module не подключён, `/api/backtests/latest` возвращает `null` metrics, а UI показывает `N/A`. Реальные metrics и Actual vs Forecast должны прийти через `BacktestResult`.
+
+## Running the Application
+
+### Backend
 
 ```bash
-git clone https://github.com/BAITC-Hacks/hack-a6d47084-tishab.git
-cd hack-a6d47084-tishab
+cd backend
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# Linux/macOS: source .venv/bin/activate
+pip install -r requirements.txt
+copy .env.example .env  # Windows; cp .env.example .env on Linux/macOS
+uvicorn app.main:app --reload
 ```
 
-Убедитесь, что файлы данных на месте:
+### Frontend
 
-```powershell
-Get-ChildItem .\data\*.csv
+```bash
+cd frontend
+copy .env.example .env  # Windows; cp .env.example .env on Linux/macOS
+npm install
+npm run dev
 ```
 
-## Как проверить решение
+- Frontend: `http://localhost:5173`
+- Backend: `http://localhost:8000`
+- Swagger: `http://localhost:8000/docs`
 
-Жюри может воспроизвести текущую версию без установки пакетов:
+### Tests
 
-1. Клонировать репозиторий и выполнить команду выше.
-2. Открыть любой CSV в табличном редакторе или просмотрщике текста.
-3. Убедиться, что первая строка содержит пять полей, перечисленных в разделе «Состав данных».
-4. Проверить наличие каталогов `ai/`, `backend/` и `frontend/` и ознакомиться с их назначением в README-файлах.
+```bash
+cd backend && pytest -q
+cd ../frontend && npm run build
+```
 
-## Ограничения
+## Project Structure
 
-- Нет исполняемого кода, конфигурации окружения и автоматических тестов.
-- Нет обученной модели, прогнозов, метрик качества или пользовательского интерфейса.
-- Нет реализованных интеграций с внешними источниками, API или базами данных.
-- В данных есть разрывы 10-минутной временной сетки.
-- Deployed-версия в репозитории не указана.
+```text
+ai/                    Team forecasting module boundary (not implemented here)
+backend/
+  app/api/             FastAPI endpoints
+  app/schemas/         Public Pydantic contracts
+  app/services/        Application orchestration
+  app/integrations/    mock/real provider adapters
+  app/db/              SQLAlchemy models and repository
+  tests/               API and contract tests
+frontend/
+  src/components/      Forecast, provenance, weather, agent UI
+  src/pages/           Dashboard, details, history, backtest
+  src/services/api.js  Single FastAPI client
+data/                  Original, unchanged turbine CSV files
+```
 
-## Следующий шаг для команды
+## Current Implementation Status
 
-Команда может независимо реализовать части в `ai/`, `backend/` и `frontend/`, зафиксировать их контракты и дополнить README командами запуска только после появления фактических зависимостей и исходного кода.
+### Implemented in Web Layer
+
+- FastAPI REST API, Swagger, Pydantic contracts и SQLite persistence;
+- Forecast, Weather и Agent provider boundaries;
+- six explicit mock scenarios;
+- React dashboard, forecast/uncertainty и dynamic model comparison;
+- Knowledge Boundary, Weather, Provenance и Forecast Receipt UI;
+- Agent Activity, LLM-off, history, lineage и backtest UI;
+- backend tests и проверенная frontend production build.
+
+### Provided / Integrated by Other Team Members
+
+Ещё требуется подключить: SCADA preprocessing, weather retrieval, historical vintage selection, deterministic knowledge-boundary implementation, feature engineering, LightGBM, Power Curve, Persistence/Climatology, optional TFT/ensemble, uncertainty calculation, validation, revision decision logic и LLM Supervisor.
+
+## Data
+
+Оригинальные CSV остаются неизменными в `data/`:
+
+| Турбина | Записей | Период | Пропуски 10-минутной сетки |
+| --- | ---: | --- | ---: |
+| T1 | 142 360 | 11.03.2023 — 31.01.2026 | 9 992 |
+| T2 | 149 499 | 11.03.2023 — 31.01.2026 | 2 853 |
+
+Планируемый внешний источник — Open-Meteo Previous Runs API; он пока не интегрирован. Ни frontend, ни mock backend не обращаются к внешней погоде.
+
+## Limitations
+
+- Все численные forecast/weather values сейчас синтетические demo fixtures.
+- Реальные ML, weather и LLM modules не подключены.
+- Scientific knowledge-boundary и revision algorithms не реализованы web-слоем.
+- Backtest metrics и actual series отсутствуют и показываются как `N/A`.
+- SQLite и локальный CORS рассчитаны на PoC, не production deployment.
+- Authentication и deployed-версия отсутствуют.
+
+## Future Work
+
+1. Реализовать три `Real*Provider` поверх модулей команды.
+2. Зафиксировать mapping реальных team outputs в Pydantic-схемы.
+3. Подключить реальные backtest results без вычислений в UI.
+4. Добавить integration tests с настоящими fixtures и проверить end-to-end replay.
+5. После интеграции заменить mock screenshots/results на подтверждённые данные.

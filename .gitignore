@@ -6,10 +6,23 @@ reports/
 # Локальные настройки
 .env
 .env.*
+!.env.example
 
 # Типовые временные файлы
 __pycache__/
 *.py[cod]
+*.db
+.pytest_cache/
 node_modules/
 dist/
 build/
+
+# Кэш погодных данных, окружения, ОС
+data/cache/
+.venv/
+.venv*/
+venv/
+.pnpm-store/
+.DS_Store
+.idea/
+.vscode/
