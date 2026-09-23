@@ -13,11 +13,3 @@ __pycache__/
 node_modules/
 dist/
 build/
-
-# Кэш погодных данных, окружения, ОС
-data/cache/
-.venv/
-venv/
-.DS_Store
-.idea/
-.vscode/
