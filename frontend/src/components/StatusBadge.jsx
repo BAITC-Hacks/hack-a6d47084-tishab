@@ -1,3 +1,4 @@
+import { useI18n } from "../i18n/LanguageProvider";
 const LABELS = {
   pass: "PASS",
   failed: "FAILED",
@@ -9,7 +10,8 @@ const LABELS = {
   shadow: "SHADOW",
 };
 
-export default function StatusBadge({ status = "unknown" }) {
+export default function StatusBadge({ status = "unknown", label }) {
+  const { t } = useI18n();
   const normalized = String(status).toLowerCase();
-  return <span className={`status-badge status-${normalized}`}>{LABELS[normalized] || normalized.toUpperCase()}</span>;
+  return <span className={`status-badge status-${normalized}`}>{label || t(LABELS[normalized] || normalized.toUpperCase())}</span>;
 }

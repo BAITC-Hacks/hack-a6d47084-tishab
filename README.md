@@ -1,167 +1,185 @@
-# Agentic AI for Vintage-Aware Wind Power Forecasting
+# Windline — Agentic AI for Vintage-Aware Wind Power Forecasting
 
-## Overview
+Веб-прототип для просмотра почасовых прогнозов выработки ветровых турбин, происхождения данных и решений о допустимости прогноза.
 
-PoC web-системы для просмотра почасового прогноза нормализованной выработки двух ветровых турбин на горизонте 24–48 часов. Web-слой объединяет weather, forecasting и agent-модули через стабильные интерфейсы и показывает uncertainty, provenance, knowledge boundary и историю версий.
+> **Текущая версия — демонстрация интерфейса и интеграционного слоя на синтетических данных.** FastAPI, React и сохранение результатов работают. Реальные погодные данные, обученные ML-модели и LLM пока не подключены. Для запуска демонстрации API-ключи не нужны.
 
-> Forecast the future. Prove what information you used. Validate the result. Recompute when the evidence changes.
+## 1. Какую проблему решает проект
 
-Сейчас FastAPI и React полностью работают с явно обозначенными mock-данными. Реальные weather, ML и LLM-модули ещё не подключены; mock-результаты нельзя считать benchmark-метриками.
+Операторам ветроэлектростанций и аналитикам энергетики важно понимать не только ожидаемую выработку, но и то, на каких данных построен прогноз.
 
-## Windows Quick Start
+При проверке прогноза на историческом периоде легко случайно использовать погоду или наблюдения, которые стали известны уже после момента выпуска прогноза. Такая «утечка из будущего» делает оценку качества недостоверной.
 
-Перед началом установите Git, Python 3.12 и Node.js LTS версии 22.12+ или более новой. Команды ниже не требуют активации Python virtual environment и поэтому работают при строгой PowerShell ExecutionPolicy.
+Идея Windline — показывать прогноз вместе с диапазоном неопределённости, временем доступности погоды, версиями и журналом решений. Термин **vintage-aware** означает учёт того, какая версия данных была доступна на выбранный момент времени. В текущем прототипе это демонстрируется заранее заданными mock-сценариями, а не полноценной научной проверкой архивов.
 
-```powershell
-git clone https://github.com/BAITC-Hacks/hack-a6d47084-tishab.git
-cd hack-a6d47084-tishab
+## 2. Что реализовано
 
-# Backend
-cd backend
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-Copy-Item .env.example .env
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+- **Dashboard:** запуск демонстрационного прогноза на 24 или 48 часов.
+- **Графики:** P10/P50/P90 для T1, T2 и отдельной синтетической серии PLANT; переключение турбин и сравнение доступных моделей.
+- **Knowledge Boundary:** отображение результата проверки допустимости исходных данных по времени.
+- **Forecast Receipt и Provenance:** идентификатор прогноза, версия, источник и запуск погоды, время доступности, названия версий модели и признаков.
+- **История:** результаты сохраняются в SQLite и доступны на отдельной странице.
+- **Версии:** демонстрационный переход V1 → V2 и причина пересмотра.
+- **Агент:** структурированные решения и журнал событий; сохранение численного результата при недоступности агента.
+- **Backtest:** таблица для метрик MAE, RMSE и nMAE. Пока результатов нет, отображается `N/A`.
+- **Интерфейс:** адаптивная вёрстка, тёмная и светлая темы с сохранением выбора, SVG-сцена ВЭС с вращением лопастей и анимацией ветра. При включённом системном уменьшении движения анимации сцены отключаются.
+- **Языки:** English, русский и қазақша. Переключатель в верхней панели меняет подписи страниц, форм, статусов и известных демо-сообщений, а также форматы дат и чисел. Выбор сохраняется в браузере; переключение не сбрасывает параметры формы и текущий прогноз.
+- **API:** FastAPI, Swagger/OpenAPI, валидация запросов и восемь backend-тестов.
+
+Сцена с тремя нарисованными турбинами — иллюстрация. Подписи `Live` и `Nominal` в ней не являются показаниями датчиков. Исходные данные проекта относятся к двум турбинам.
+
+## 3. Как работает решение
+
+1. Пользователь открывает **Overview** и задаёт `Issue time` — момент выпуска исторического прогноза.
+2. Выбирает горизонт 24/48 часов и один из шести демонстрационных сценариев.
+3. Нажимает **Launch forecast**. React отправляет запрос в FastAPI.
+4. Backend последовательно вызывает погодный, прогнозный и агентский провайдеры. В стандартной конфигурации они возвращают синтетические данные.
+5. Сервис собирает результат и сведения о его происхождении, сохраняет их в SQLite.
+6. Интерфейс показывает графики, статусы, погоду и события. Запуск появляется в **History**.
+
+**P10/P50/P90** — поля для 10-го, 50-го и 90-го процентилей прогнозного распределения. В демонстрации их значения формируются математическими mock-функциями; статистическая калибровка интервалов не выполнена.
+
+## 4. Технологии
+
+| Компонент | Технологии в репозитории |
+| --- | --- |
+| Backend | Python; FastAPI 0.115.12; Uvicorn 0.34.3 |
+| Контракты и настройки | Pydantic 2.11.5; pydantic-settings 2.9.1 |
+| Хранение | SQLAlchemy 2.0.41; SQLite |
+| Frontend | JavaScript, JSX, React, React Router, Vite |
+| Визуализация | Recharts; SVG; CSS-анимации и переменные тем |
+| Проверки | pytest 8.3.5; HTTPX 0.28.1; production-сборка Vite |
+| Шрифты | DM Sans и Manrope через Google Fonts, с резервными системными шрифтами |
+| Контейнеризация | Dockerfile для backend на Python 3.12 |
+
+В `frontend/pnpm-lock.yaml` зафиксированы React 19.3.0, Vite 8.3.0, React Router 7.18.4 и Recharts 3.10.1. В `package.json` зависимости указаны как `latest`: установка через npm может выбрать другие версии.
+
+**AI-модели и внешние API:** исполняемых ML/LLM-интеграций пока нет. Названия `lightgbm`, `persistence`, `power_curve`, `tft`, `ensemble` используются в mock-ответах для проверки интерфейса. Они не означают, что соответствующие модели обучены или запущены. Подключение ECMWF и LLM-сервиса не реализовано.
+
+## 5. Архитектура
+
+```text
+Браузер: React / Vite
+        │ REST JSON
+        ▼
+FastAPI: маршруты + Pydantic-контракты
+        │
+        ▼
+ForecastService
+        ├── WeatherProvider  → погода и результат Knowledge Boundary
+        ├── ForecastProvider → точки прогноза, модели, версии
+        └── AgentProvider    → решение и события
+        │
+        ▼
+ForecastRepository → SQLAlchemy → SQLite
 ```
 
-Оставьте backend запущенным и откройте второй PowerShell:
+React получает данные только через FastAPI. Провайдеры отделяют интерфейс и хранение от будущего кода команды ML/Weather/LLM. Сейчас работают реализации `mock.py`; `real.py` выбрасывают `ProviderUnavailableError`. Недоступность погоды или прогнозного провайдера даёт HTTP 503, недоступность агента обрабатывается с сохранением прогноза.
 
-```powershell
-cd path\to\hack-a6d47084-tishab\frontend
-Copy-Item .env.example .env
-npm install
-npm run dev
+```text
+.
+├── ai/                      README; место для будущего AI-кода
+├── data/                    два исходных CSV и описание данных
+├── backend/
+│   ├── app/api/             REST-маршруты
+│   ├── app/schemas/         контракты запросов и ответов
+│   ├── app/integrations/    mock-провайдеры и real-заглушки
+│   ├── app/services/        сборка результатов
+│   ├── app/db/              модели и репозиторий SQLite
+│   ├── tests/               API-тесты
+│   ├── Dockerfile
+│   └── requirements.txt
+├── frontend/
+│   ├── src/pages/           Overview, Forecast Details, History, Backtest
+│   ├── src/components/      графики, карточки и SVG-сцена ВЭС
+│   ├── src/services/api.js  клиент FastAPI
+│   └── pnpm-lock.yaml
+└── README.md
 ```
 
-Откройте:
+Основные маршруты API:
 
-- Dashboard: `http://localhost:5173`
-- Swagger: `http://127.0.0.1:8000/docs`
-- Health: `http://127.0.0.1:8000/api/health`
-
-## Prerequisites
-
-| Инструмент | Рекомендация | Проверка |
+| Метод | Адрес | Назначение |
 | --- | --- | --- |
-| Git | актуальный Git for Windows | `git --version` |
-| Python | 3.12 recommended | `py -3.12 --version` |
-| Node.js | LTS 22.12+ или более новая LTS | `node --version` |
-| npm | устанавливается вместе с Node.js | `npm --version` |
+| GET | `/api/health` | Состояние приложения и выбранные провайдеры |
+| POST | `/api/forecasts/run` | Создание и сохранение запуска |
+| GET | `/api/forecasts` | История запусков |
+| GET | `/api/forecasts/{id}` | Полный результат |
+| GET | `/api/forecasts/{id}/weather` | Погода и Knowledge Boundary |
+| GET | `/api/forecasts/{id}/agent` | Результат агента |
+| GET | `/api/forecasts/{id}/events` | Журнал событий |
+| GET | `/api/forecasts/{id}/lineage` | История версий |
+| GET | `/api/backtests/latest` | Последняя оценка или ответ с `N/A` |
 
-Backend проверен на Python 3.12. Frontend использует Vite 8, его фактическое ограничение — Node `^20.19.0` или `>=22.12.0`; production build также проверен на Node 24.19.0. Python 3.13 не выбран рекомендуемой версией, чтобы будущие ML-зависимости команды подключались с меньшим риском несовместимости.
+## 6. Установка и запуск
 
-## Windows Setup
+Понадобятся Git, Python 3.12, Node.js 22.12+ и npm. Версия Node соответствует ограничению Vite в lockfile. Backend и frontend запускаются в **двух отдельных терминалах**.
 
-### 1. Git
+### Windows / PowerShell
 
-Проверьте Git:
-
-```powershell
-git --version
-```
-
-Если команда не найдена, установите [Git for Windows](https://git-scm.com/download/win) или выполните:
-
-```powershell
-winget install Git.Git
-```
-
-Закройте и заново откройте PowerShell, затем снова выполните `git --version`.
-
-### 2. Clone
+Склонируйте репозиторий:
 
 ```powershell
 git clone https://github.com/BAITC-Hacks/hack-a6d47084-tishab.git
 cd hack-a6d47084-tishab
-git status
 ```
 
-После чистого clone ожидается ветка `main` без локальных изменений.
-
-### 3. Python
-
-Проверьте доступные команды и PATH:
-
-```powershell
-python --version
-py --version
-where.exe python
-where.exe py
-```
-
-На Windows предпочтителен Python Launcher `py`. Если `python` открывает Microsoft Store или ведёт на Windows Store alias, используйте `py` либо отключите alias в Windows Settings → App execution aliases.
-
-Если Python отсутствует, установите [Python 3.12 с python.org](https://www.python.org/downloads/windows/) или:
-
-```powershell
-winget install Python.Python.3.12
-```
-
-Откройте новый PowerShell и проверьте:
-
-```powershell
-py -3.12 --version
-```
-
-### 4. Backend virtual environment
-
-Из корня репозитория:
+Первый терминал — backend:
 
 ```powershell
 cd backend
 py -3.12 -m venv .venv
-Get-ChildItem .venv\Scripts
-```
-
-В `.venv\Scripts` должны присутствовать `python.exe`, `pip.exe`, `Activate.ps1` и `activate.bat`.
-
-#### PowerShell ExecutionPolicy
-
-Активация окружения необязательна. Самый надёжный вариант — напрямую вызывать Python из `.venv`:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
-```
-
-Если нужна активация и PowerShell выдаёт `PSSecurityException` или `execution of scripts is disabled`, разрешите скрипты только для текущего процесса:
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\.venv\Scripts\Activate.ps1
-```
-
-`-Scope Process` действует только в текущем PowerShell и не меняет постоянную системную политику. Команда `.venv\Scripts\activate` не является корректной командой PowerShell: используйте `Activate.ps1` с префиксом `.\`.
-
-### 5. Backend dependencies
-
-Без активации:
-
-```powershell
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-При активированном окружении:
+Активация окружения не требуется: команды вызывают Python из `.venv` напрямую.
+
+Второй терминал — из корня клонированного репозитория:
 
 ```powershell
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+cd frontend
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
+npm install
+npm run dev -- --port 5173 --strictPort
 ```
 
-`uvicorn` устанавливается из `backend/requirements.txt`; до установки зависимостей команда запуска недоступна.
+`--strictPort` предотвращает незаметный переход Vite на другой порт, который не разрешён настройками CORS.
 
-### 6. Backend environment
+Для установки frontend по существующему lockfile, если pnpm уже установлен, используйте `pnpm install --frozen-lockfile` вместо `npm install`. Затем — `pnpm run dev --port 5173 --strictPort`. Файла `package-lock.json` в репозитории нет, поэтому `npm ci` для чистого клонирования не подходит.
 
-```powershell
-Copy-Item .env.example .env
-Get-Content .env
+### Linux / macOS
+
+Из корня репозитория, первый терминал:
+
+```bash
+cd backend
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+test -f .env || cp .env.example .env
+.venv/bin/python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Фактическая mock-конфигурация:
+Второй терминал, также из корня репозитория:
 
-```env
+```bash
+cd frontend
+test -f .env || cp .env.example .env
+npm install
+npm run dev -- --port 5173 --strictPort
+```
+
+### Адреса и настройки
+
+- Интерфейс: [http://localhost:5173](http://localhost:5173).
+- Swagger: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+- Проверка API: [http://127.0.0.1:8000/api/health](http://127.0.0.1:8000/api/health).
+
+В `backend/.env` для демонстрации должны быть:
+
+```dotenv
 APP_NAME=Vintage-Aware Wind Forecast API
 APP_ENV=development
 DATABASE_URL=sqlite:///./wind_forecasts.db
@@ -171,594 +189,135 @@ WEATHER_PROVIDER=mock
 AGENT_PROVIDER=mock
 ```
 
-### 7. Backend startup
+В `frontend/.env`:
 
-```powershell
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
-```
-
-Uvicorn по умолчанию слушает `127.0.0.1:8000`. При активированном venv эквивалентная команда:
-
-```powershell
-python -m uvicorn app.main:app --reload
-```
-
-### 8. Backend verification
-
-Проверьте в браузере или PowerShell:
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:8000/
-Invoke-RestMethod http://127.0.0.1:8000/api/health
-```
-
-- Root: `http://127.0.0.1:8000/`
-- Swagger: `http://127.0.0.1:8000/docs`
-- Health: `http://127.0.0.1:8000/api/health`
-
-### 9. Port 8000 troubleshooting
-
-При `WinError 10013`, access denied или занятом порте:
-
-```powershell
-netstat -ano | findstr :8000
-Get-Process -Id <PID>
-```
-
-Останавливайте процесс только если убедились, что он принадлежит вашему предыдущему запуску:
-
-```powershell
-Stop-Process -Id <PID>
-```
-
-Или запустите backend на 8001:
-
-```powershell
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8001
-```
-
-Проверка зарезервированных Windows диапазонов:
-
-```powershell
-netsh interface ipv4 show excludedportrange protocol=tcp
-```
-
-Для порта 8001 Swagger и health будут доступны по `http://127.0.0.1:8001/docs` и `http://127.0.0.1:8001/api/health`. Обязательно обновите `frontend/.env`: `VITE_API_URL=http://127.0.0.1:8001`.
-
-### 10. Backend tests
-
-Из каталога `backend`:
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest -q
-```
-
-Тесты проверяют health и Swagger, forecast schemas, dynamic model fields, knowledge boundary, rejected leakage run, lineage, provider selection и LLM-off fallback.
-
-### 11. Node.js and npm
-
-До установки frontend dependencies проверьте:
-
-```powershell
-node --version
-npm --version
-where.exe node
-where.exe npm
-```
-
-Если Node.js или npm отсутствуют, установите [Node.js LTS](https://nodejs.org/) или:
-
-```powershell
-winget install OpenJS.NodeJS.LTS
-```
-
-Полностью закройте терминал и откройте новый, чтобы обновился PATH. Затем повторите `node --version` и `npm --version`.
-
-### 12. Frontend setup and startup
-
-Из корня проекта:
-
-```powershell
-cd frontend
-Copy-Item .env.example .env
-Get-Content .env
-npm install
-npm run dev
-```
-
-Откройте `http://localhost:5173`. Vite настроен на порт 5173.
-
-Репозиторий содержит `pnpm-lock.yaml`, но не содержит `package-lock.json`, поэтому инструкция для npm использует `npm install`, а не `npm ci`. Если команда использует pnpm, можно выполнить `pnpm install --frozen-lockfile` и `pnpm run dev`.
-
-`frontend/.env` связывает React с FastAPI:
-
-```env
+```dotenv
 VITE_API_URL=http://localhost:8000
 ```
 
-Если backend работает на 8001, измените значение до запуска Vite:
+SQLite-файл создаётся при запуске backend. Для указанных команд он расположен в `backend/wind_forecasts.db`. Значение `DATABASE_URL` с относительным путём зависит от рабочей директории.
 
-```env
-VITE_API_URL=http://127.0.0.1:8001
-```
+После изменения `.env` перезапустите соответствующий процесс. Секреты не нужны для mock-режима; локальные `.env`, БД, окружения и результаты сборки исключены из Git.
 
-После изменения `.env` перезапустите `npm run dev`.
+## 7. Как проверить решение жюри
 
-### 13. Frontend build check
+### Основной сценарий
 
-```powershell
-npm run build
-```
+1. Запустите обе части приложения и откройте `/api/health`: ожидаются `status: "ok"` и три провайдера `mock`.
+2. Откройте **Overview**, задайте дату и время, горизонт **24 hours**, сценарий **A · Normal**.
+3. Нажмите **Launch forecast**. Ожидаются отметка `MOCK MODE`, статус `PUBLISHED`, проверка `PASS`, график P10/P50/P90 и сведения об источниках.
+4. Переключите **PLANT / T1 / T2**. Затем откройте **History** и результат созданного запуска.
+5. Переключите светлую/тёмную тему в верхней панели. Выбор сохраняется после обновления страницы.
 
-Готовая production-сборка создаётся в `frontend/dist/` и исключена из Git.
+При открытии Overview автоматически загружается последний сохранённый запуск. Значение сценария в форме относится к **следующему** запуску; смена списка без нажатия кнопки не пересчитывает текущий результат.
 
-## Linux/macOS Setup
+### Дополнительные сценарии
 
-Backend:
-
-```bash
-git clone https://github.com/BAITC-Hacks/hack-a6d47084-tishab.git
-cd hack-a6d47084-tishab/backend
-python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-cp .env.example .env
-python -m uvicorn app.main:app --reload
-```
-
-В новом терминале:
-
-```bash
-cd hack-a6d47084-tishab/frontend
-cp .env.example .env
-npm install
-npm run dev
-```
-
-## Demo Startup
-
-Terminal 1:
-
-```powershell
-cd backend
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
-```
-
-Terminal 2:
-
-```powershell
-cd frontend
-npm run dev
-```
-
-Откройте Dashboard `http://localhost:5173`, Swagger `http://127.0.0.1:8000/docs` и Health `http://127.0.0.1:8000/api/health`.
-
-## Architecture
-
-```text
-React Frontend
-      ↓ HTTP
-FastAPI Backend
-      ↓
-Application / Integration Layer
-      ├── WeatherProvider  → team weather/data module
-      ├── ForecastProvider → team forecasting/ML module
-      └── AgentProvider    → team supervisor/LLM module
-```
-
-React обращается только к FastAPI. Web-слой не выбирает weather vintage, не рассчитывает P10/P50/P90, не обучает ML и не генерирует численный forecast через LLM.
-
-## P0 Forecast Pipeline
-
-```text
-Historical issue time
-        ↓
-SCADA history
-        ↓
-ECMWF archived runs
-        ↓
-Vintage selection
-        ↓
-available_at <= issue_time
-        ↓
-Knowledge Boundary PASS
-        ↓
-Feature preparation
-        ↓
-LightGBM
-        ↓
-T1/T2 24–48h forecast
-        ↓
-Provenance
-```
-
-Этот scientific pipeline ещё не интегрирован. FastAPI принимает его будущий структурированный результат через adapters.
-
-## Weather / Vintage Assumption
-
-Для P0 replay команда рассматривает инженерное предположение:
-
-```text
-available_at = initialization_time + 7 hours
-```
-
-Это engineering replay assumption, а не подтверждённый timestamp публикации ECMWF. Его должен реализовать и подтвердить weather/data module; текущий FastAPI самостоятельно timestamp не вычисляет.
-
-При issue time `06:00 UTC` запуск `00Z` с допущением `+7h` становится доступен только в `07:00 UTC`. Следовательно, `00Z` run не является legal в `06:00`, и внешний vintage selector должен выбрать более ранний доступный run.
-
-## Project Structure
-
-```text
-hack-a6d47084-tishab/
-├── ai/                     placeholder для team forecasting modules
-├── backend/
-│   ├── app/api/            FastAPI routes
-│   ├── app/db/             SQLAlchemy models и repository
-│   ├── app/integrations/   mock/real provider adapters
-│   ├── app/schemas/        Pydantic API contracts
-│   ├── app/services/       application orchestration
-│   ├── tests/              backend tests
-│   ├── .env.example
-│   └── requirements.txt
-├── data/                   неизменяемые исходные CSV
-├── frontend/
-│   ├── src/components/     forecast, weather, provenance, agent UI
-│   ├── src/pages/          dashboard, history, backtest
-│   ├── src/services/api.js FastAPI client
-│   ├── .env.example
-│   └── package.json
-└── README.md
-```
-
-`ANALYSIS.md`, `docs/`, отдельные `models/`, `outputs/` и processed-data каталоги в текущей `main` отсутствуют.
-
-## Team Modules
-
-| Зона | Ответственность |
+| Вариант в интерфейсе | Ожидаемый результат |
 | --- | --- |
-| Weather/Data | SCADA, ECMWF retrieval, vintage selection, available-at и knowledge boundary |
-| Forecasting | features, LightGBM, baselines, P10/P50/P90, validation |
-| Agent | orchestration и human-readable interpretation; не numerical forecast |
-| Backend | integration adapters, contracts, persistence и REST API |
-| Frontend | navigation, API calls, visualization и error states |
+| B · Baselines | Несколько синтетических линий моделей; их можно включать и выключать |
+| C · Revision V1→V2 | Демонстрационная история двух версий |
+| D · Leakage rejected | `REJECTED` и `BLOCKED`: mock-погода доступна на 6 часов позже issue time |
+| E · Agent unavailable | Численный результат сохранён, агент недоступен |
+| F · Optional models | Дополнительные поля TFT/ensemble отображаются в сравнении |
 
-## Interface Contracts
+В сценарии D API по-прежнему возвращает `integrity_status: "failed"`. UI объясняет блокировку и помечает график как диагностический. Это заданный тест защиты от будущих данных, а не сетевой сбой. Реальный универсальный механизм проверки и запрета публикации ещё требует интеграции.
 
-Фактические абстракции находятся в `backend/app/integrations/`:
+### Проверка через API
 
-```python
-class WeatherProvider:
-    def get_weather_context(self, issue_time, horizon_hours, scenario): ...
-
-class ForecastProvider:
-    def run_forecast(self, issue_time, horizon_hours, scenario): ...
-
-class AgentProvider:
-    def process(self, forecast, weather, scenario): ...
-```
-
-Параметр `scenario` используется mock-реализациями для демонстрационных состояний. Real adapters должны преобразовать результат командного модуля в существующие Pydantic schemas без изменения public API.
-
-## Run Modes
-
-### Mode A — Web development with mocks
-
-```env
-FORECAST_PROVIDER=mock
-WEATHER_PROVIDER=mock
-AGENT_PROVIDER=mock
-```
-
-Работает сейчас без внешних модулей. Все значения синтетические и помечены `MOCK MODE`.
-
-### Mode B — Real forecasting integration
-
-```env
-FORECAST_PROVIDER=real
-WEATHER_PROVIDER=real
-AGENT_PROVIDER=mock
-```
-
-Требует реализации `RealForecastProvider` и `RealWeatherProvider`. Сейчас эти adapters отвечают `503 unavailable`.
-
-### Mode C — Full integrated demo
-
-```env
-FORECAST_PROVIDER=real
-WEATHER_PROVIDER=real
-AGENT_PROVIDER=real
-```
-
-Требует подключения всех трёх team modules. Это ещё не реализовано.
-
-## Mock Mode
-
-| Scenario | Назначение |
-| --- | --- |
-| `normal` | P10/P50/P90 и boundary PASS |
-| `baselines` | dynamic model list |
-| `revision` | lineage V1 → V2 |
-| `leakage` | boundary FAILED и rejected run |
-| `agent_off` | forecast работает без Agent |
-| `optional_models` | optional TFT/ensemble fields |
-
-Mock output предназначен только для разработки API/UI. Его нельзя использовать как MAE, RMSE, coverage или реальный прогноз.
-
-## Real Integration
-
-Реализации находятся в:
-
-- `backend/app/integrations/weather/real.py`
-- `backend/app/integrations/forecast/real.py`
-- `backend/app/integrations/agent/real.py`
-
-После подключения кода команды переключите соответствующую переменную provider с `mock` на `real`. Frontend и публичные endpoints менять не требуется.
-
-## API
-
-| Method | Endpoint | Назначение |
-| --- | --- | --- |
-| GET | `/` | API name и ссылка на docs |
-| GET | `/api/health` | Health и provider modes |
-| POST | `/api/forecasts/run` | Запуск configured provider flow |
-| GET | `/api/forecasts` | История forecast runs |
-| GET | `/api/forecasts/{forecast_id}` | Полный forecast |
-| GET | `/api/forecasts/{forecast_id}/lineage` | Version lineage |
-| GET | `/api/forecasts/{forecast_id}/weather` | Weather context и boundary |
-| GET | `/api/forecasts/{forecast_id}/agent` | Structured agent result |
-| GET | `/api/forecasts/{forecast_id}/events` | Agent events |
-| GET | `/api/backtests/latest` | Последний backtest или N/A placeholder |
-
-Полные request/response schemas доступны в Swagger: `http://127.0.0.1:8000/docs`.
-
-## Data and Outputs
-
-| Данные | Фактическое расположение | Формат / статус |
-| --- | --- | --- |
-| Исходные турбины | `data/*.csv` | CSV; не изменять |
-| Web persistence | `backend/wind_forecasts.db` при стандартном запуске | SQLite; generated, Git ignored |
-| Forecast points | таблица `forecast_points` | SQLite + JSON model predictions |
-| Provenance/weather/lineage | поля `forecast_runs` | SQLite JSON |
-| Agent events | таблица `agent_events` | SQLite |
-| Backtest results | таблица `backtest_results` | SQLite JSON; real results не подключены |
-| Weather cache | `data/cache/` зарезервирован и Git ignored | Not implemented yet |
-| Processed data | отдельный путь не определён | Not implemented yet |
-| File-based forecast outputs | `outputs/` Git ignored | Not implemented yet |
-| Отдельные agent logs | путь не определён | Not implemented yet |
-
-Оригинальные CSV должны оставаться неизменными. Generated web state можно удалить вместе с локальным `backend/wind_forecasts.db`, если нужен чистый mock-demo запуск.
-
-## Testing
-
-Backend:
+В PowerShell можно создать запуск с явно заданным UTC-временем:
 
 ```powershell
-cd backend
+$payload = @{
+    issue_time = "2026-02-10T06:00:00Z"
+    horizon_hours = 24
+    scenario = "normal"
+} | ConvertTo-Json
+
+$forecast = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/forecasts/run" -ContentType "application/json" -Body $payload
+$forecast | Select-Object forecast_id, status, integrity_status, horizon_hours, is_mock
+```
+
+Ожидаются `published`, `pass`, `24`, `True`. API требует timezone в `issue_time`. В форме браузера время сейчас интерпретируется в локальном часовом поясе компьютера.
+
+## 8. Данные и интеграции
+
+В `data/` находятся два исходных CSV турбин. Формат описан в [data/README.md](data/README.md):
+
+- идентификатор;
+- статистическое время;
+- средняя скорость ветра;
+- нормализованная активная мощность;
+- средняя температура окружающей среды.
+
+Эти CSV **не читаются текущим mock-конвейером**. Подготовка признаков, обучение и инференс на них не реализованы. Исходные файлы следует сохранять неизменными.
+
+Работающие источники данных для UI — mock-провайдеры backend и сохранённые результаты SQLite. В SQLite хранятся запуски, прогнозные точки, события агента и структура для результатов backtest.
+
+Точки подключения будущих модулей:
+
+| Файл | Ожидаемая ответственность |
+| --- | --- |
+| `backend/app/integrations/weather/real.py` | Погодный контекст и результат проверки доступности данных |
+| `backend/app/integrations/forecast/real.py` | Точки прогноза, модели, версии и lineage |
+| `backend/app/integrations/agent/real.py` | Структурированное решение агента и журнал событий |
+
+Переключение `WEATHER_PROVIDER` или `FORECAST_PROVIDER` на `real` сейчас приводит к 503. Для `AGENT_PROVIDER=real` сервис возвращает состояние недоступности агента, сохраняя численный результат остальных провайдеров.
+
+## 9. Проверки и частые проблемы
+
+Backend, из каталога `backend`:
+
+```powershell
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Frontend:
+На Linux/macOS: `.venv/bin/python -m pytest -q`.
+
+Frontend, из каталога `frontend`:
 
 ```powershell
-cd frontend
 npm run build
+npm test
 ```
 
-На текущей реализации проверено: 8 backend tests pass; Vite production build completes. Vite предупреждает о JS chunk больше 500 kB, но сборку это не блокирует.
+Сборка записывается в `frontend/dist/`. В backend есть 8 тестов: API, контракты, модели, boundary, версии, выбор провайдеров, отсутствие агента и отклонённый leakage-запуск. Во frontend есть 5 тестов локализации: полнота словаря, переводы, подстановка параметров, допустимые языки и форматирование дат/чисел. Полного набора UI-автотестов пока нет. Vite может предупреждать о JS-файле больше 500 kB — это предупреждение о размере, а не ошибка сборки.
 
-## Environment Variables
+| Симптом | Что проверить |
+| --- | --- |
+| `Backend unavailable / Failed to fetch` | Открывается ли `/api/health`; запущен ли Uvicorn; совпадают ли порт API и `VITE_API_URL` |
+| Ошибка CORS | Открывайте UI через `http://localhost:5173`; при другом адресе добавьте точный origin в `CORS_ORIGINS` и перезапустите backend |
+| Порт 5173 занят | Используйте уже запущенный frontend либо явно выберите другой порт и разрешите его в CORS |
+| Порт 8000 занят | Проверьте, не работает ли уже нужный API; при запуске на 8001 измените также `VITE_API_URL` |
+| `BLOCKED / REJECTED` | Посмотрите причину в Knowledge Boundary; для демонстрации успешного запуска выберите A и нажмите Launch forecast |
+| Backtest показывает `N/A` | Реальные метрики ещё не интегрированы |
+| Команда `uvicorn` не найдена | Установите зависимости и вызывайте `.venv\Scripts\python.exe -m uvicorn` |
+| `npm` не найден | Проверьте установку Node.js/npm и откройте новый терминал |
+| `.venv` не запускается после переноса проекта | Создайте новое виртуальное окружение установленным Python 3.12; окружения не предназначены для переноса |
 
-### Backend
+Пример CORS для двух локальных портов:
 
-| Variable | Meaning | Default в коде/example |
-| --- | --- | --- |
-| `APP_NAME` | Название FastAPI приложения | `Vintage-Aware Wind Forecast API` |
-| `APP_ENV` | Маркер окружения | `development` |
-| `DATABASE_URL` | SQLAlchemy connection URL | `sqlite:///./wind_forecasts.db` |
-| `CORS_ORIGINS` | JSON-массив разрешённых frontend origins | `["http://localhost:5173"]` |
-| `FORECAST_PROVIDER` | `mock` или `real` | `mock` |
-| `WEATHER_PROVIDER` | `mock` или `real` | `mock` |
-| `AGENT_PROVIDER` | `mock` или `real` | `mock` |
-
-### Frontend
-
-| Variable | Meaning | Default/example |
-| --- | --- | --- |
-| `VITE_API_URL` | Base URL FastAPI | `http://localhost:8000` |
-
-`.env` загружается при старте процесса. После изменения backend `.env` перезапустите Uvicorn; после изменения frontend `.env` перезапустите Vite.
-
-## Troubleshooting
-
-### Python command not found
-
-**Причина:** Python не установлен или не добавлен в PATH.
-
-**Исправление:** установите Python 3.12, откройте новый PowerShell и используйте `py -3.12 --version`.
-
-### `python` открывает Microsoft Store
-
-**Причина:** Windows Store App Execution Alias.
-
-**Исправление:** используйте `py`, либо отключите aliases `python.exe`/`python3.exe` в Windows Settings.
-
-### `uvicorn` is not recognized
-
-**Причина:** зависимости не установлены или используется глобальная команда вне venv.
-
-**Исправление:**
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+```dotenv
+CORS_ORIGINS=["http://localhost:5173","http://localhost:5174"]
 ```
 
-### `Activate.ps1` blocked
+Ожидать ML/LLM для устранения сетевой ошибки не требуется: mock-демонстрация должна работать при запущенном FastAPI.
 
-**Причина:** PowerShell ExecutionPolicy.
+## 10. Ограничения текущей версии
 
-**Исправление:** не активируйте venv и вызывайте `.\.venv\Scripts\python.exe` напрямую; либо используйте `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`.
+- **Нет реальной прогнозной модели и LLM.** Нельзя заявлять измеренную точность, экономический эффект или качество P10/P50/P90 по этой демонстрации.
+- **Нет подключения ECMWF/погодного API и научной проверки vintage.** Статусы mock-сценариев заданы провайдерами. Сервис не реализует независимый запрет публикации любого результата с failed boundary.
+- **Временные зоны требуют доработки:** форма использует локальное время браузера, а SQLite может возвращать timestamps без offset, в отличие от вложенных JSON-метаданных. Даты в разных панелях могут расходиться; для точной проверки запроса используйте UTC в API.
+- **Backtest не рассчитывается:** нет загрузки реальных результатов через публичный endpoint, а график Actual vs Forecast пока не реализован, даже если заполнить поле `series`.
+- **V1→V2 — mock-история:** нет реального пересчёта и отдельных операций публикации версий.
+- **Нет авторизации, фоновой очереди, миграций БД и пагинации истории.** Это локальный PoC, а не промышленный сервис.
+- **Индикатор API обновляется при открытии страницы.** После восстановления backend может потребоваться перезагрузка.
+- **Локализация:** интерфейс доступен на английском, русском и казахском. Технические ID, названия моделей и неизвестные сообщения внешних провайдеров сохраняются в исходном виде. Нативное окно выбора даты может использовать язык браузера. Подписи иллюстрации статические, не привязаны к состоянию настоящей ВЭС.
+- **Серия PLANT синтетическая:** её связь с суммой T1+T2 и физические единицы должны быть согласованы при интеграции.
+- **Воспроизводимость frontend зависит от способа установки:** для сохранения версий используйте существующий pnpm lockfile; npm устанавливает зависимости по `latest`.
 
-### `WinError 10013` or port 8000 already used
+## 11. Развёрнутая версия
 
-**Причина:** порт занят или зарезервирован Windows.
+В текущем репозитории нет подтверждённой ссылки на публично развёрнутое приложение. Демонстрация запускается локально по инструкции выше.
 
-**Исправление:** проверьте `netstat -ano | findstr :8000`, завершите только известный процесс либо запустите `--port 8001` и измените `VITE_API_URL`.
-
-### `npm` is not recognized
-
-**Причина:** Node.js/npm не установлены или отсутствуют в PATH.
-
-**Исправление:** выполните `winget install OpenJS.NodeJS.LTS`, полностью перезапустите терминал, затем проверьте `where.exe node` и `where.exe npm`.
-
-### Node установлен, но npm не виден
-
-**Причина:** старый PowerShell ещё использует прежний PATH.
-
-**Исправление:** закройте все терминалы, откройте новый. Если проблема остаётся, переустановите Node.js LTS с опцией добавления в PATH.
-
-### Frontend cannot reach backend
-
-**Причина:** backend не запущен, указан неверный порт или Vite использует старое `.env`.
-
-**Исправление:** откройте `/api/health`, проверьте `frontend/.env`, затем перезапустите `npm run dev`.
-
-### CORS error
-
-**Причина:** frontend origin отсутствует в `CORS_ORIGINS`.
-
-**Исправление:** используйте `http://localhost:5173` либо добавьте фактический origin в JSON-массив backend `.env`, например `["http://localhost:5173","http://127.0.0.1:5173"]`, и перезапустите backend.
-
-### `.env` missing
-
-**Причина:** example не был скопирован.
-
-**Исправление:** выполните `Copy-Item .env.example .env` отдельно в `backend` и `frontend`.
-
-### Mock provider selected unexpectedly
-
-**Причина:** example по умолчанию использует `mock`.
-
-**Исправление:** проверьте `/api/health` и backend `.env`. Переключайте на `real` только после реализации соответствующего real adapter.
-
-### Real provider unavailable
-
-**Причина:** текущие `Real*Provider` являются integration stubs.
-
-**Исправление:** подключите командный модуль в соответствующем `real.py` или верните provider в `mock`.
-
-### Tests cannot import `app`
-
-**Причина:** pytest запущен не из `backend` или используется другой Python.
-
-**Исправление:**
-
-```powershell
-cd backend
-.\.venv\Scripts\python.exe -m pytest -q
-```
-
-### `.venv` exists but its `python.exe` does not start
-
-**Причина:** virtual environment был перемещён, создан несовместимым Python runtime либо повреждён синхронизацией/антивирусом.
-
-**Исправление:** удалите только generated-каталог `backend/.venv`, создайте его заново официальным Python 3.12 и повторите установку. Не удаляйте исходники проекта:
-
-```powershell
-cd backend
-Remove-Item -Recurse -Force .venv
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-```
-
-## Health Check Checklist
-
-- Backend health: `GET http://127.0.0.1:8000/api/health`
-- Swagger: `http://127.0.0.1:8000/docs`
-- Frontend: `http://localhost:5173`
-- Backend tests: `.\.venv\Scripts\python.exe -m pytest -q`
-- Frontend build: `npm run build`
-
-## Clean-Machine Verification
-
-- [ ] Clone выполнен в новую папку.
-- [ ] Git, Python 3.12, Node.js и npm найдены в PATH.
-- [ ] `backend/.venv` создан.
-- [ ] Backend dependencies установлены.
-- [ ] `backend/.env` создан из example.
-- [ ] Backend запускается.
-- [ ] Root, health и Swagger открываются.
-- [ ] Backend tests проходят.
-- [ ] `frontend/.env` создан из example.
-- [ ] Frontend dependencies установлены.
-- [ ] Frontend запускается и достигает backend.
-- [ ] Mock scenario создаёт явно помеченный demo forecast.
-- [ ] `npm run build` проходит.
-- [ ] Real integration mode проверен только если real modules действительно подключены.
-
-## Security
-
-Никогда не коммитьте `.env` с API keys или другими секретами. `.gitignore` исключает `.env`, `.venv/`, `node_modules/`, `__pycache__/`, SQLite `.db`, build artifacts, outputs и cache. `.env.example` содержит только безопасные defaults и остаётся в Git.
-
-## Git Workflow
-
-```powershell
-git status
-git add README.md
-git commit -m "docs: improve clean Windows setup"
-git push
-```
-
-Сообщение `no changes added to commit` означает, что изменённые файлы не добавлены в staging area либо изменений нет. Повторно проверьте `git status`.
-
-## Pre-Demo Checklist
-
-- [ ] Backend tests pass.
-- [ ] Frontend build passes.
-- [ ] `.env` и secrets не staged.
-- [ ] Mock results не описаны как реальные metrics.
-- [ ] Backend и `VITE_API_URL` используют один порт.
-- [ ] Swagger и health открываются.
-- [ ] README-команды проверены в PowerShell.
-- [ ] Исходные CSV не изменены.
-
-## Current Status
-
-### Implemented
-
-- FastAPI REST API, Swagger и CORS config.
-- Pydantic contracts и SQLite persistence.
-- Forecast, Weather и Agent provider boundaries.
-- Six mock scenarios.
-- React dashboard, uncertainty и dynamic model comparison.
-- Knowledge Boundary, Weather, Provenance и Forecast Receipt UI.
-- Agent activity, LLM-off, history, lineage и backtest UI.
-- Backend tests и frontend production build.
-
-### Not yet integrated
-
-- Real SCADA preprocessing.
-- ECMWF/weather retrieval и verified vintage timestamps.
-- Knowledge-boundary scientific implementation.
-- Feature engineering, LightGBM и baselines.
-- Real uncertainty/validation/revision logic.
-- Real LLM Supervisor.
-- Real backtest metrics и file-based outputs.
-
-## Limitations
-
-- Численные forecast/weather values сейчас синтетические mock fixtures.
-- `real` providers пока возвращают unavailable.
-- SQLite и локальный CORS рассчитаны на PoC, а не production deployment.
-- Authentication и deployed-версия отсутствуют.
-- npm clean install не зафиксирован `package-lock.json`; репозиторий содержит pnpm lockfile.
-- Vite build проходит с предупреждением о JS chunk больше 500 kB.
-
-## Future Work
-
-1. Реализовать `RealWeatherProvider`, `RealForecastProvider`, `RealAgentProvider`.
-2. Подтвердить ECMWF publication latency и заменить инженерное `+7h` реальными metadata.
-3. Добавить реальные backtest results и outputs через существующие schemas.
-4. Добавить integration fixtures и clean-machine CI.
-5. Зафиксировать единый package-manager workflow для frontend.
+Для backend есть Dockerfile; настройки публичного развёртывания всего приложения отсутствуют. При размещении frontend на статическом хостинге понадобится SPA fallback на `index.html`, а также настройка адреса API и CORS.

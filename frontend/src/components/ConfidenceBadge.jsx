@@ -1,3 +1,5 @@
+import { useI18n } from "../i18n/LanguageProvider";
 export default function ConfidenceBadge({ value }) {
-  return <span className="confidence-badge">{value ? value.toUpperCase() : "N/A"}</span>;
+  const { t } = useI18n();
+  return <span className="confidence-badge">{value ? t(value.toUpperCase()) : t("N/A")}</span>;
 }
